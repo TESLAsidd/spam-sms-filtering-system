@@ -1,13 +1,18 @@
 import os
 import json
 import logging
+from functools import wraps
 import numpy as np
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
 import joblib
 
 from model.xray_analyzer import analyze_message_signals
 from database.db import (
     init_db,
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
     save_analysis,
     get_analyses,
     get_analysis_by_id,
@@ -35,8 +40,33 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
+# Secure Flask session configuration
+app.secret_key = os.environ.get("SECRET_KEY", "sms-sentinel-session-secret-production-token-2026-key-v1")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if os.environ.get("VERCEL") or os.environ.get("FLASK_ENV") == "production":
+    app.config["SESSION_COOKIE_SECURE"] = True
+
 # Production Security Configuration: Limit max incoming request payload to 16KB
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+
+def login_required(f):
+    """Decorator to require authentication for protected API and HTML endpoints."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("user_id"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_current_user():
+    """Retrieve the currently authenticated user from session."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    return get_user_by_id(user_id)
 
 @app.after_request
 def add_security_headers(response):
@@ -273,10 +303,151 @@ def favicon():
     """Handle browser favicon request cleanly without 404."""
     return "", 204
 
+# =============================================================================
+# AUTHENTICATION HTML & API ROUTES
+# =============================================================================
+
+@app.route("/login", methods=["GET"])
+def login_page():
+    """Renders the split-screen cyber login page."""
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    return render_template("login.html")
+
+@app.route("/register", methods=["GET"])
+def register_page():
+    """Renders the split-screen cyber registration page."""
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    return render_template("register.html")
+
+@app.route("/api/auth/register", methods=["POST"])
+def api_register():
+    """
+    Register a new user with input validation, password hashing,
+    and automatic authenticated session initialization.
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Content-Type must be application/json."}), 400
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    confirm_password = data.get("confirm_password") or ""
+
+    if not name:
+        return jsonify({"success": False, "error": "Please enter your full name."}), 400
+    if not email or "@" not in email or "." not in email:
+        return jsonify({"success": False, "error": "Please enter a valid email address."}), 400
+    if len(password) < 8:
+        return jsonify({"success": False, "error": "Password must be at least 8 characters long."}), 400
+    if password != confirm_password:
+        return jsonify({"success": False, "error": "Passwords do not match."}), 400
+
+    existing_user = get_user_by_email(email)
+    if existing_user:
+        return jsonify({"success": False, "error": "An account with this email already exists."}), 400
+
+    try:
+        password_hash = generate_password_hash(password)
+        user_id = create_user(name, email, password_hash)
+        
+        # Initialize authenticated session
+        session["user_id"] = user_id
+        session["user_name"] = name
+        session["user_email"] = email
+
+        logger.info(f"New user registered: '{email}' (ID: #{user_id})")
+        return jsonify({
+            "success": True,
+            "message": "Registration successful.",
+            "user": {
+                "id": user_id,
+                "name": name,
+                "email": email
+            }
+        }), 201
+    except Exception as e:
+        logger.error(f"Error registering user: {e}")
+        return jsonify({"success": False, "error": "Registration failed. Please try again."}), 500
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    """
+    Authenticate user via email and hashed password, creating a secure session.
+    """
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Content-Type must be application/json."}), 400
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    if not email or not password:
+        return jsonify({"success": False, "error": "Please provide both email and password."}), 400
+
+    user = get_user_by_email(email)
+    if not user or not check_password_hash(user["password_hash"], password):
+        return jsonify({"success": False, "error": "Invalid email or password."}), 401
+
+    # Establish session
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    session["user_email"] = user["email"]
+
+    logger.info(f"User logged in: '{email}' (ID: #{user['id']})")
+    return jsonify({
+        "success": True,
+        "message": "Login successful.",
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"]
+        }
+    }), 200
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    """Destroy the current user session."""
+    user_id = session.get("user_id")
+    session.clear()
+    logger.info(f"User #{user_id} logged out.")
+    return jsonify({"success": True, "message": "Logged out successfully."}), 200
+
+@app.route("/api/auth/me", methods=["GET"])
+def api_auth_me():
+    """Return the currently authenticated user's profile or false."""
+    user = get_current_user()
+    if user:
+        return jsonify({
+            "authenticated": True,
+            "user": {
+                "id": user["id"],
+                "name": user["name"],
+                "email": user["email"],
+                "created_at": user.get("created_at")
+            }
+        }), 200
+    return jsonify({"authenticated": False}), 200
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout_page():
+    """Logs out the user and redirects to /login."""
+    session.clear()
+    return redirect("/login")
+
+# =============================================================================
+# PROTECTED APPLICATION ROUTES
+# =============================================================================
+
 @app.route("/", methods=["GET"])
+@app.route("/scan", methods=["GET"])
+@app.route("/archive", methods=["GET"])
+@app.route("/insights", methods=["GET"])
 def index():
     """
-    Serves the web dashboard for browser requests,
+    Serves the web dashboard for authenticated browser requests,
     or returns API health JSON if requested as application/json.
     """
     if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
@@ -286,9 +457,14 @@ def index():
             "service": "SMS Sentinel — Spam SMS Filtering API",
             "version": "1.0.0",
             "model_loaded": is_model_loaded,
+            "authenticated": bool(session.get("user_id")),
             "artifact": "model/spam_classifier.pkl",
             "endpoints": {
                 "health": "GET /api/health",
+                "auth_login": "POST /api/auth/login",
+                "auth_register": "POST /api/auth/register",
+                "auth_logout": "POST /api/auth/logout",
+                "auth_me": "GET /api/auth/me",
                 "predict": "POST /api/predict",
                 "analyses": "GET /api/analyses",
                 "analyses_detail": "GET /api/analyses/<id>",
@@ -296,6 +472,9 @@ def index():
             }
         }), 200
     
+    if not session.get("user_id"):
+        return redirect(url_for("login_page"))
+        
     return render_template("index.html")
 
 @app.route("/api/health", methods=["GET"])
@@ -354,8 +533,12 @@ def api_model_info():
 def api_get_analyses():
     """
     Retrieve paginated, searched, and filtered stored analyses from SQLite.
-    Supports limit (default 20, max 100), offset, search, prediction, and risk_level.
+    Enforces per-user data isolation.
     """
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+
     try:
         search = request.args.get("search", "")
         risk_level = request.args.get("risk_level") or request.args.get("risk", "ALL")
@@ -368,7 +551,8 @@ def api_get_analyses():
             prediction=prediction,
             risk_level=risk_level,
             limit=limit,
-            offset=offset
+            offset=offset,
+            user_id=user_id
         )
 
         return jsonify({
@@ -387,9 +571,13 @@ def api_get_analyses():
 @app.route("/api/analyses/<int:record_id>", methods=["GET"])
 @app.route("/api/archive/<int:record_id>", methods=["GET"])
 def api_get_analysis_detail(record_id):
-    """Retrieve full stored investigation details for a specific record."""
+    """Retrieve full stored investigation details for a specific record with IDOR protection."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+
     try:
-        rec = get_analysis_by_id(record_id)
+        rec = get_analysis_by_id(record_id, user_id=user_id)
         if rec:
             return jsonify({"success": True, "data": rec}), 200
         return jsonify({"success": False, "error": f"Analysis #{record_id} not found."}), 404
@@ -400,9 +588,13 @@ def api_get_analysis_detail(record_id):
 @app.route("/api/analyses/<int:record_id>", methods=["DELETE"])
 @app.route("/api/archive/<int:record_id>", methods=["DELETE"])
 def api_delete_analysis_item(record_id):
-    """Delete a single stored analysis record."""
+    """Delete a single stored analysis record with user authorization."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+
     try:
-        deleted = delete_analysis(record_id)
+        deleted = delete_analysis(record_id, user_id=user_id)
         if deleted:
             return jsonify({"success": True, "message": f"Record #{record_id} deleted."}), 200
         return jsonify({"success": False, "error": f"Record #{record_id} not found."}), 404
@@ -413,9 +605,13 @@ def api_delete_analysis_item(record_id):
 @app.route("/api/analyses/clear", methods=["POST"])
 @app.route("/api/archive/clear", methods=["POST"])
 def api_clear_analyses():
-    """Clear all analysis records from the SQLite database."""
+    """Clear all analysis records belonging to the current user."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+
     try:
-        success = clear_analyses()
+        success = clear_analyses(user_id=user_id)
         return jsonify({"success": success, "message": "Archive cleared."}), 200
     except Exception as e:
         logger.error(f"Error clearing analyses: {e}")
@@ -424,8 +620,12 @@ def api_clear_analyses():
 @app.route("/api/insights", methods=["GET"])
 def api_insights():
     """Compute aggregate threat telemetry and stats from SQLite for the Insights tab."""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required. Please sign in.", "authenticated": False}), 401
+
     try:
-        data = get_insights_data()
+        data = get_insights_data(user_id=user_id)
         return jsonify({
             "success": True,
             "data": data,
@@ -447,7 +647,16 @@ def predict():
     """
     Classify an SMS message using the saved ML pipeline and perform
     secondary deterministic X-Ray risk signal extraction.
+    Requires authenticated user session.
     """
+    # 0. Authentication Check
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({
+            "error": "Authentication required. Please sign in.",
+            "authenticated": False
+        }), 401
+
     # 1. Ensure request contains JSON
     if not request.is_json:
         return jsonify({
@@ -531,7 +740,7 @@ def predict():
         except Exception as trace_err:
             logger.warning(f"Pipeline trace generation warning: {trace_err}")
 
-        # 10. Persist to SQLite for persistent Archive storage
+        # 10. Persist to SQLite for persistent Archive storage associated with user
         record_id = None
         try:
             record_payload = {
@@ -550,7 +759,7 @@ def predict():
                 "pipeline_trace": pipeline_trace,
                 "recommended_action": secondary["recommended_action"]
             }
-            record_id = save_analysis(record_payload)
+            record_id = save_analysis(record_payload, user_id=user_id)
         except Exception as db_err:
             logger.warning(f"Could not persist analysis to database: {db_err}")
 
@@ -600,7 +809,7 @@ def handle_500(e):
 
 if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5555))
     debug = os.environ.get("FLASK_DEBUG", "false").lower() in ("true", "1", "yes")
     logger.info(f"Starting SMS Sentinel on http://{host}:{port} (Debug: {debug})")
     app.run(host=host, port=port, debug=debug)

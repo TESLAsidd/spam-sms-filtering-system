@@ -1,7 +1,7 @@
 """
-SMS SENTINEL - SQLite Database Layer (Phase 6 & 7)
-Provides lightweight persistent storage, indexing, retrieval, and
-real-time SQL aggregation for SMS threat analyses and telemetry insights.
+SMS SENTINEL - SQLite Database Layer
+Provides lightweight persistent storage, user authentication models,
+indexing, retrieval, and real-time SQL aggregation with per-user data isolation.
 """
 
 import os
@@ -34,15 +34,33 @@ def get_db_connection():
 def init_db():
     """
     Initialize SQLite database schema and indexes on application startup.
-    Ensures zero-config automatic creation on clean installations.
+    Ensures zero-config automatic creation and backward-compatible schema migrations.
     """
-    os.makedirs(DB_DIR, exist_ok=True)
+    try:
+        os.makedirs(DB_DIR, exist_ok=True)
+    except Exception:
+        pass
+        
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # 1. Create Users Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+    
+    # 2. Create Analyses Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS analyses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             message TEXT NOT NULL,
             prediction TEXT NOT NULL,
             confidence REAL NOT NULL,
@@ -55,10 +73,18 @@ def init_db():
             xray_tokens TEXT,
             recommended_action TEXT,
             pipeline_trace TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
     
+    # 3. Safe Schema Migration: Ensure user_id column exists if table was created in an earlier phase
+    cursor.execute("PRAGMA table_info(analyses)")
+    existing_columns = [col["name"] for col in cursor.fetchall()]
+    if "user_id" not in existing_columns:
+        cursor.execute("ALTER TABLE analyses ADD COLUMN user_id INTEGER REFERENCES users(id)")
+    
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_user_id ON analyses(user_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses(created_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_prediction ON analyses(prediction)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_threat_level ON analyses(threat_level)")
@@ -66,6 +92,79 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+# =============================================================================
+# USER AUTHENTICATION & MANAGEMENT
+# =============================================================================
+
+def create_user(name: str, email: str, password_hash: str) -> int:
+    """
+    Register a new user in the SQLite database.
+    Returns the newly created user's primary key ID.
+    Raises sqlite3.IntegrityError if email already exists.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO users (name, email, password_hash, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (
+        name.strip(),
+        email.strip().lower(),
+        password_hash,
+        datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    ))
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return user_id
+
+def get_user_by_email(email: str) -> dict:
+    """
+    Retrieve user record by email (case-insensitive).
+    Returns dict containing id, name, email, password_hash, created_at or None.
+    """
+    if not email:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (email.strip().lower(),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "email": row["email"],
+            "password_hash": row["password_hash"],
+            "created_at": str(row["created_at"])
+        }
+    return None
+
+def get_user_by_id(user_id: int) -> dict:
+    """
+    Retrieve user record by primary key ID.
+    Never exposes password_hash.
+    """
+    if not user_id:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email, created_at FROM users WHERE id = ?", (int(user_id),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "email": row["email"],
+            "created_at": str(row["created_at"])
+        }
+    return None
+
+# =============================================================================
+# ANALYSES CRUD WITH PER-USER DATA ISOLATION
+# =============================================================================
 
 def row_to_analysis_dict(row) -> dict:
     """Convert SQLite row to clean analysis dictionary with deserialized JSON fields."""
@@ -88,6 +187,7 @@ def row_to_analysis_dict(row) -> dict:
 
     return {
         "id": row["id"],
+        "user_id": row["user_id"] if "user_id" in row.keys() else None,
         "message": row["message"],
         "raw_message": row["message"],
         "prediction": row["prediction"],
@@ -105,9 +205,10 @@ def row_to_analysis_dict(row) -> dict:
         "created_at": created_str
     }
 
-def save_analysis(result: dict) -> int:
+def save_analysis(result: dict, user_id: int = None) -> int:
     """
     Store a complete, successfully analyzed SMS record in SQLite.
+    Associates the record with the authenticated user_id.
     Returns the auto-incremented primary key ID.
     """
     conn = get_db_connection()
@@ -129,6 +230,7 @@ def save_analysis(result: dict) -> int:
     
     cursor.execute("""
         INSERT INTO analyses (
+            user_id,
             message,
             prediction,
             confidence,
@@ -142,8 +244,9 @@ def save_analysis(result: dict) -> int:
             recommended_action,
             pipeline_trace,
             created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+        user_id,
         raw_msg,
         pred,
         conf,
@@ -169,10 +272,11 @@ def get_analyses(
     prediction: str = "ALL",
     risk_level: str = "ALL",
     limit: int = 20,
-    offset: int = 0
+    offset: int = 0,
+    user_id: int = None
 ) -> dict:
     """
-    Retrieve stored analyses with search, filtering, and pagination.
+    Retrieve stored analyses with search, filtering, pagination, and user isolation.
     Enforces maximum limit of 100 and orders newest first.
     """
     limit = min(max(1, int(limit)), 100)
@@ -183,6 +287,10 @@ def get_analyses(
     
     where_clauses = ["1=1"]
     params = []
+    
+    if user_id is not None:
+        where_clauses.append("user_id = ?")
+        params.append(int(user_id))
     
     if search:
         where_clauses.append("message LIKE ?")
@@ -220,43 +328,58 @@ def get_analyses(
         "has_more": (offset + len(results)) < total_count
     }
 
-def get_analysis_by_id(record_id: int) -> dict:
-    """Retrieve full analysis details for a single record by primary key."""
+def get_analysis_by_id(record_id: int, user_id: int = None) -> dict:
+    """
+    Retrieve full analysis details for a single record by primary key.
+    Enforces user data ownership to prevent Insecure Direct Object References (IDOR).
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM analyses WHERE id = ?", (record_id,))
+    if user_id is not None:
+        cursor.execute("SELECT * FROM analyses WHERE id = ? AND user_id = ?", (record_id, int(user_id)))
+    else:
+        cursor.execute("SELECT * FROM analyses WHERE id = ?", (record_id,))
     row = cursor.fetchone()
     conn.close()
     return row_to_analysis_dict(row) if row else None
 
-def delete_analysis(record_id: int) -> bool:
-    """Delete a single analysis record by ID."""
+def delete_analysis(record_id: int, user_id: int = None) -> bool:
+    """
+    Delete a single analysis record by ID.
+    Enforces user data ownership to prevent unauthorized deletion.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM analyses WHERE id = ?", (record_id,))
+    if user_id is not None:
+        cursor.execute("DELETE FROM analyses WHERE id = ? AND user_id = ?", (record_id, int(user_id)))
+    else:
+        cursor.execute("DELETE FROM analyses WHERE id = ?", (record_id,))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
     return deleted
 
-def clear_analyses() -> bool:
-    """Clear all analysis records and reset sequence."""
+def clear_analyses(user_id: int = None) -> bool:
+    """Clear analyses for a given user (or all if user_id is None)."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM analyses")
-    try:
-        cursor.execute("DELETE FROM sqlite_sequence WHERE name='analyses'")
-    except Exception:
-        pass
+    if user_id is not None:
+        cursor.execute("DELETE FROM analyses WHERE user_id = ?", (int(user_id),))
+    else:
+        cursor.execute("DELETE FROM analyses")
+        try:
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name='analyses'")
+        except Exception:
+            pass
     conn.commit()
     conn.close()
     return True
 
 # =============================================================================
-# PHASE 7 — REAL-TIME SQLITE ANALYTICAL AGGREGATIONS
+# REAL-TIME SQLITE ANALYTICAL AGGREGATIONS (USER-ISOLATED)
 # =============================================================================
 
-def get_total_stats(conn=None) -> dict:
+def get_total_stats(conn=None, user_id: int = None) -> dict:
     """Calculate total analyses count, spam count, not-spam count, and spam rate."""
     close_conn = False
     if conn is None:
@@ -264,13 +387,17 @@ def get_total_stats(conn=None) -> dict:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"""
         SELECT 
             COUNT(*) as total,
             COALESCE(SUM(CASE WHEN is_spam = 1 THEN 1 ELSE 0 END), 0) as spam,
             COALESCE(SUM(CASE WHEN is_spam = 0 THEN 1 ELSE 0 END), 0) as not_spam
         FROM analyses
-    """)
+        {where_sql}
+    """, params)
     row = cursor.fetchone()
     
     total = row["total"] or 0
@@ -288,12 +415,10 @@ def get_total_stats(conn=None) -> dict:
         "spam_rate": spam_rate
     }
 
-def get_threat_distribution(conn=None) -> dict:
+def get_threat_distribution(conn=None, user_id: int = None) -> dict:
     """
     Calculate threat distribution across documented score thresholds:
-    0–33: Low Risk
-    34–66: Medium Risk
-    67–100: High Risk
+    0–33: Low Risk, 34–66: Medium Risk, 67–100: High Risk
     """
     close_conn = False
     if conn is None:
@@ -301,13 +426,17 @@ def get_threat_distribution(conn=None) -> dict:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"""
         SELECT
             COALESCE(SUM(CASE WHEN threat_score BETWEEN 0 AND 33 THEN 1 ELSE 0 END), 0) as low,
             COALESCE(SUM(CASE WHEN threat_score BETWEEN 34 AND 66 THEN 1 ELSE 0 END), 0) as medium,
             COALESCE(SUM(CASE WHEN threat_score >= 67 THEN 1 ELSE 0 END), 0) as high
         FROM analyses
-    """)
+        {where_sql}
+    """, params)
     row = cursor.fetchone()
     
     dist = {
@@ -321,7 +450,7 @@ def get_threat_distribution(conn=None) -> dict:
         
     return dist
 
-def get_classification_distribution(conn=None) -> dict:
+def get_classification_distribution(conn=None, user_id: int = None) -> dict:
     """Calculate counts for SPAM vs NOT SPAM classification."""
     close_conn = False
     if conn is None:
@@ -329,12 +458,16 @@ def get_classification_distribution(conn=None) -> dict:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"""
         SELECT
             COALESCE(SUM(CASE WHEN is_spam = 1 THEN 1 ELSE 0 END), 0) as spam,
             COALESCE(SUM(CASE WHEN is_spam = 0 THEN 1 ELSE 0 END), 0) as not_spam
         FROM analyses
-    """)
+        {where_sql}
+    """, params)
     row = cursor.fetchone()
     
     dist = {
@@ -347,7 +480,7 @@ def get_classification_distribution(conn=None) -> dict:
         
     return dist
 
-def get_activity_data(conn=None) -> list:
+def get_activity_data(conn=None, user_id: int = None) -> list:
     """Group analysis activity chronologically by date."""
     close_conn = False
     if conn is None:
@@ -355,17 +488,21 @@ def get_activity_data(conn=None) -> list:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"""
         SELECT 
             SUBSTR(created_at, 1, 10) as scan_date,
             COUNT(*) as total,
             COALESCE(SUM(CASE WHEN is_spam = 1 THEN 1 ELSE 0 END), 0) as spam,
             COALESCE(SUM(CASE WHEN is_spam = 0 THEN 1 ELSE 0 END), 0) as not_spam
         FROM analyses
+        {where_sql}
         GROUP BY scan_date
         ORDER BY scan_date ASC
         LIMIT 14
-    """)
+    """, params)
     rows = cursor.fetchall()
     
     timeline = [
@@ -383,10 +520,9 @@ def get_activity_data(conn=None) -> list:
         
     return timeline
 
-def get_risk_indicator_counts(conn=None) -> list:
+def get_risk_indicator_counts(conn=None, user_id: int = None) -> list:
     """
     Aggregate frequencies of stored risk indicators across actual database analyses.
-    Represents the number of analyses containing each specific indicator.
     """
     close_conn = False
     if conn is None:
@@ -394,7 +530,10 @@ def get_risk_indicator_counts(conn=None) -> list:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("SELECT risk_signals FROM analyses WHERE risk_signals IS NOT NULL")
+    where_sql = "WHERE risk_signals IS NOT NULL AND user_id = ?" if user_id is not None else "WHERE risk_signals IS NOT NULL"
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"SELECT risk_signals FROM analyses {where_sql}", params)
     rows = cursor.fetchall()
     
     signal_counts = {}
@@ -403,7 +542,6 @@ def get_risk_indicator_counts(conn=None) -> list:
     for r in rows:
         try:
             sigs = json.loads(r["risk_signals"]) if r["risk_signals"] else []
-            # Count each indicator once per message
             seen_in_message = set()
             for s in sigs:
                 label = s.get("label") or "Unknown"
@@ -431,7 +569,7 @@ def get_risk_indicator_counts(conn=None) -> list:
         
     return indicators
 
-def get_average_metrics(conn=None) -> dict:
+def get_average_metrics(conn=None, user_id: int = None) -> dict:
     """Calculate actual average model confidence and average threat score from SQLite."""
     close_conn = False
     if conn is None:
@@ -439,13 +577,17 @@ def get_average_metrics(conn=None) -> dict:
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id),) if user_id is not None else ()
+    
+    cursor.execute(f"""
         SELECT
             COUNT(*) as total,
             COALESCE(AVG(confidence), 0.0) as avg_confidence,
             COALESCE(AVG(threat_score), 0.0) as avg_threat_score
         FROM analyses
-    """)
+        {where_sql}
+    """, params)
     row = cursor.fetchone()
     
     total = row["total"] or 0
@@ -453,7 +595,6 @@ def get_average_metrics(conn=None) -> dict:
         res = {"confidence": 0.0, "threat_score": 0.0}
     else:
         avg_conf = float(row["avg_confidence"] or 0.0)
-        # Normalize if confidence is recorded as a decimal (<= 1.0)
         if 0.0 < avg_conf <= 1.0:
             avg_conf = avg_conf * 100.0
         avg_threat = float(row["avg_threat_score"] or 0.0)
@@ -468,20 +609,24 @@ def get_average_metrics(conn=None) -> dict:
         
     return res
 
-def get_recent_activity(limit: int = 8, conn=None) -> list:
-    """Retrieve latest 5-10 analyses for the recent activity stream."""
+def get_recent_activity(limit: int = 8, conn=None, user_id: int = None) -> list:
+    """Retrieve latest analyses for the recent activity stream."""
     close_conn = False
     if conn is None:
         conn = get_db_connection()
         close_conn = True
         
     cursor = conn.cursor()
-    cursor.execute("""
+    where_sql = "WHERE user_id = ?" if user_id is not None else ""
+    params = (int(user_id), limit) if user_id is not None else (limit,)
+    
+    cursor.execute(f"""
         SELECT id, message, prediction, threat_level, threat_score, confidence, is_spam, created_at
         FROM analyses
+        {where_sql}
         ORDER BY id DESC
         LIMIT ?
-    """, (limit,))
+    """, params)
     rows = cursor.fetchall()
     
     recent = []
@@ -508,22 +653,22 @@ def get_recent_activity(limit: int = 8, conn=None) -> list:
         
     return recent
 
-def get_insights_data() -> dict:
+def get_insights_data(user_id: int = None) -> dict:
     """
     Compile complete real-time Insights payload strictly from SQLite.
-    Includes both the Phase 7 contract schema and backwards-compatible fields.
+    Filtered by user_id for strict data isolation.
     """
     conn = get_db_connection()
     
-    totals = get_total_stats(conn)
+    totals = get_total_stats(conn, user_id=user_id)
     has_data = totals["analyses"] > 0
     
-    threat_dist = get_threat_distribution(conn)
-    class_dist = get_classification_distribution(conn)
-    activity = get_activity_data(conn)
-    risk_indicators = get_risk_indicator_counts(conn)
-    averages = get_average_metrics(conn)
-    recent = get_recent_activity(limit=8, conn=conn)
+    threat_dist = get_threat_distribution(conn, user_id=user_id)
+    class_dist = get_classification_distribution(conn, user_id=user_id)
+    activity = get_activity_data(conn, user_id=user_id)
+    risk_indicators = get_risk_indicator_counts(conn, user_id=user_id)
+    averages = get_average_metrics(conn, user_id=user_id)
+    recent = get_recent_activity(limit=8, conn=conn, user_id=user_id)
     
     conn.close()
     
@@ -536,7 +681,7 @@ def get_insights_data() -> dict:
         "risk_indicators": risk_indicators,
         "averages": averages,
         "recent": recent,
-        # Legacy/convenience flat fields for existing frontend telemetry bindings
+        # Flat legacy convenience fields for dashboard bindings
         "total_analyzed": totals["analyses"],
         "spam_detected": totals["spam"],
         "legitimate_detected": totals["not_spam"],
@@ -555,8 +700,8 @@ get_investigation_by_id = get_analysis_by_id
 delete_investigation = delete_analysis
 clear_investigations = clear_analyses
 
-def get_investigations(search: str = "", risk_filter: str = "ALL", type_filter: str = "ALL", limit: int = 50, offset: int = 0) -> list:
-    res = get_analyses(search=search, risk_level=risk_filter, prediction=type_filter, limit=limit, offset=offset)
+def get_investigations(search: str = "", risk_filter: str = "ALL", type_filter: str = "ALL", limit: int = 50, offset: int = 0, user_id: int = None) -> list:
+    res = get_analyses(search=search, risk_level=risk_filter, prediction=type_filter, limit=limit, offset=offset, user_id=user_id)
     return res["records"]
 
 # Auto-initialize table schema on import

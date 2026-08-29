@@ -34,6 +34,12 @@ class TestComprehensiveQA(unittest.TestCase):
         cls.client = app.test_client()
         cls.pipeline = load_ml_pipeline()
 
+    def setUp(self):
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_name"] = "QA Admin"
+            sess["user_email"] = "qa@sentinel.test"
+
     # =========================================================================
     # 1. ML MODEL VALIDATION
     # =========================================================================

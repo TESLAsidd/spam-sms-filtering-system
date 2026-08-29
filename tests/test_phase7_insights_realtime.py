@@ -41,6 +41,10 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
         """Clean database before each test."""
         init_db()
         clear_analyses()
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_name"] = "Insights Admin"
+            sess["user_email"] = "insights@sentinel.test"
 
     def tearDown(self):
         """Clean up after test execution."""
@@ -89,7 +93,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
             "threat_level": "HIGH RISK",
             "confidence": 98.0,
             "signals": [{"type": "url", "label": "Suspicious URL"}]
-        })
+        }, user_id=1)
         save_analysis({
             "message": "Ham test message 2",
             "prediction": "NOT SPAM",
@@ -98,7 +102,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
             "threat_level": "LOW RISK",
             "confidence": 99.0,
             "signals": []
-        })
+        }, user_id=1)
         save_analysis({
             "message": "Spam test message 3",
             "prediction": "SPAM",
@@ -107,7 +111,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
             "threat_level": "HIGH RISK",
             "confidence": 95.0,
             "signals": [{"type": "prize", "label": "Prize / Reward"}, {"type": "url", "label": "Suspicious URL"}]
-        })
+        }, user_id=1)
 
         res = self.client.get("/api/insights")
         self.assertEqual(res.status_code, 200)
@@ -145,7 +149,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
                 {"type": "url", "label": "Suspicious URL"},
                 {"type": "urgency", "label": "Urgency"}
             ]
-        })
+        }, user_id=1)
         save_analysis({
             "message": "Msg 2",
             "prediction": "SPAM",
@@ -155,7 +159,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
                 {"type": "url", "label": "Suspicious URL"},
                 {"type": "prize", "label": "Prize / Reward"}
             ]
-        })
+        }, user_id=1)
         save_analysis({
             "message": "Msg 3",
             "prediction": "SPAM",
@@ -165,7 +169,7 @@ class TestPhase7InsightsRealtime(unittest.TestCase):
                 {"type": "url", "label": "Suspicious URL"},
                 {"type": "money", "label": "Money"}
             ]
-        })
+        }, user_id=1)
 
         res = self.client.get("/api/insights")
         data = res.get_json()

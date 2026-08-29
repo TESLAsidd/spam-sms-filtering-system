@@ -1796,11 +1796,51 @@ document.addEventListener("DOMContentLoaded", () => {
     applyTheme(next, true);
   }
 
-  if (elements.btnThemeToggle) {
-    elements.btnThemeToggle.addEventListener("click", toggleTheme);
+  // Auth & User Profile Management
+  async function initAuth() {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data && data.authenticated && data.user) {
+        const user = data.user;
+        const name = user.name || "User";
+        const initials = name
+          .split(" ")
+          .filter(Boolean)
+          .map(n => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2) || "US";
+
+        const nameElem = document.getElementById("userDisplayName");
+        const initElem = document.getElementById("userInitials");
+        if (nameElem) nameElem.textContent = name;
+        if (initElem) initElem.textContent = initials;
+      } else {
+        window.location.href = "/login";
+      }
+    } catch (e) {
+      console.warn("Auth verification error:", e);
+    }
+  }
+
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+        showToast("Signed out successfully.", "info");
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 300);
+      } catch (e) {
+        window.location.href = "/login";
+      }
+    });
   }
 
   // Initial setup
+  initAuth();
   initTheme();
   renderPipelineTrace(buildFallbackPipelineTrace(null));
   updateArchiveCounter();

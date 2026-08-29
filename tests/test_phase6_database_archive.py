@@ -34,6 +34,10 @@ class TestPhase6DatabaseAndArchive(unittest.TestCase):
         """Ensure clean database state before each test."""
         init_db()
         clear_analyses()
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_name"] = "DB Admin"
+            sess["user_email"] = "dbadmin@sentinel.test"
 
     def test_01_database_initialization(self):
         """Verify SQLite database file exists and analyses table schema is created."""

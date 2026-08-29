@@ -57,7 +57,7 @@
         </button>
       </nav>
 
-      <!-- System Status Indicator & Theme Toggle -->
+      <!-- System Status Indicator, User Profile & Theme Toggle -->
       <div class="nav-status-wrapper">
         <button class="theme-toggle-btn" id="btn-theme-toggle" aria-label="Toggle Light and Dark Mode" title="Toggle Light / Dark Mode">
           <i data-lucide="sun" class="theme-icon-sun"></i>
@@ -68,6 +68,18 @@
           <span class="status-label">MODEL ONLINE</span>
           <i data-lucide="info" class="status-info-icon"></i>
         </button>
+        
+        <!-- Authenticated User Profile & Logout -->
+        <div class="user-nav-profile" id="userNavProfile">
+          <div class="user-avatar-chip" id="userAvatarChip" title="Authenticated User">
+            <span class="user-initials" id="userInitials">US</span>
+          </div>
+          <span class="user-display-name" id="userDisplayName">User</span>
+          <button class="logout-btn" id="btnLogout" aria-label="Sign Out" title="Sign Out">
+            <i data-lucide="log-out" class="logout-icon"></i>
+            <span class="logout-text">Logout</span>
+          </button>
+        </div>
       </div>
     </div>
   </header>

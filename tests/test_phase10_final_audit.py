@@ -38,6 +38,10 @@ class TestPhase10FinalAuditAndStressTest(unittest.TestCase):
     def setUp(self):
         init_db()
         clear_analyses()
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_name"] = "Audit Admin"
+            sess["user_email"] = "admin@sentinel.test"
 
     # =========================================================================
     # 1. CLEAN RECREATION & COLD START TEST

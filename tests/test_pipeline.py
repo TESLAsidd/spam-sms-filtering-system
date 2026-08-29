@@ -33,6 +33,10 @@ class TestSMSSentinel(unittest.TestCase):
 
     def setUp(self):
         clear_investigations()
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_name"] = "Pipeline Tester"
+            sess["user_email"] = "pipeline@sentinel.test"
 
     def test_01_ml_and_signal_prediction_spam(self):
         msg = "Congratulations! You have WON ₹50,000 in the lucky draw. Click http://bit.ly/prize immediately to claim your cash reward!"
