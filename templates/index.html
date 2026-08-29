@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMS SENTINEL — AI-Powered Spam SMS Threat Detection System</title>
+  <meta name="description" content="Production-grade AI cybersecurity intelligence console for detecting, analyzing, and explaining spam, phishing, and smishing threats in SMS messages.">
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./static/css/style.css">
+</head>
+<body>
+
+  <!-- Ambient Atmospheric Background -->
+  <div class="ambient-glow" aria-hidden="true"></div>
+  <div class="ambient-grid" aria-hidden="true"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="top-nav" id="top-nav">
+    <div class="nav-container">
+      <!-- Brand Logo -->
+      <a href="#" class="brand-link" id="brand-home-link" aria-label="SMS Sentinel Home">
+        <div class="brand-icon-wrapper">
+          <i data-lucide="shield-check" class="brand-icon"></i>
+        </div>
+        <div class="brand-text-block">
+          <span class="brand-name">SMS SENTINEL</span>
+          <span class="brand-tag">THREAT INTELLIGENCE</span>
+        </div>
+      </a>
+
+      <!-- Primary View Navigation Tabs -->
+      <nav class="nav-tabs" role="tablist" aria-label="Main Navigation">
+        <button class="nav-tab active" id="tab-scan" data-target="view-scan" role="tab" aria-selected="true" aria-controls="view-scan">
+          <i data-lucide="scan" class="tab-icon"></i>
+          <span>SCAN</span>
+        </button>
+        <button class="nav-tab" id="tab-archive" data-target="view-archive" role="tab" aria-selected="false" aria-controls="view-archive">
+          <i data-lucide="archive" class="tab-icon"></i>
+          <span>ARCHIVE</span>
+          <span class="badge-counter" id="archive-counter">0</span>
+        </button>
+        <button class="nav-tab" id="tab-insights" data-target="view-insights" role="tab" aria-selected="false" aria-controls="view-insights">
+          <i data-lucide="bar-chart-3" class="tab-icon"></i>
+          <span>INSIGHTS</span>
+        </button>
+      </nav>
+
+      <!-- System Status Indicator & Theme Toggle -->
+      <div class="nav-status-wrapper">
+        <button class="theme-toggle-btn" id="btn-theme-toggle" aria-label="Toggle Light and Dark Mode" title="Toggle Light / Dark Mode">
+          <i data-lucide="sun" class="theme-icon-sun"></i>
+          <i data-lucide="moon" class="theme-icon-moon hidden"></i>
+        </button>
+        <button class="model-status-btn" id="btn-model-status" aria-label="View Machine Learning Model Diagnostics">
+          <span class="status-pulse-dot"></span>
+          <span class="status-label">MODEL ONLINE</span>
+          <i data-lucide="info" class="status-info-icon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Wrapper -->
+  <main class="main-content" id="main-content">
+
+    <!-- ================================================================= -->
+    <!-- VIEW 1: SCAN (PRIMARY AI SECURITY CONSOLE) -->
+    <!-- ================================================================= -->
+    <section class="view-panel active" id="view-scan" role="tabpanel" aria-labelledby="tab-scan">
+      
+      <!-- Hero Section -->
+      <header class="scan-hero">
+        <div class="hero-eyebrow">
+          <i data-lucide="sparkles" class="eyebrow-icon"></i>
+          <span>AI-POWERED MESSAGE INTELLIGENCE</span>
+        </div>
+        <h1 class="hero-headline">KNOW WHAT’S HIDING INSIDE YOUR SMS.</h1>
+        <p class="hero-subtext">
+          Analyze suspicious messages using machine learning and natural language processing.
+        </p>
+      </header>
+
+      <!-- Oversized Message Input Console -->
+      <div class="message-input-card">
+        <div class="input-card-header">
+          <div class="input-title-group">
+            <span class="micro-label">MESSAGE INPUT</span>
+            <span class="input-hint">Paste an SMS message to begin threat analysis</span>
+          </div>
+          <div class="input-actions-group">
+            <span class="char-counter" id="char-counter">0 / 500</span>
+            <button class="btn-text-action" id="btn-clear-input" title="Clear input" aria-label="Clear input text">
+              <i data-lucide="eraser"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="input-card-body">
+          <textarea
+            id="sms-input"
+            class="sms-textarea"
+            placeholder="Paste suspicious SMS message text here..."
+            maxlength="500"
+            rows="3"
+            aria-label="SMS text for analysis"
+          ></textarea>
+        </div>
+
+        <!-- Quick Demo Example Prompts -->
+        <div class="input-card-footer">
+          <div class="demo-prompts-wrapper">
+            <span class="demo-prompt-label">Example messages:</span>
+            <div class="demo-pills" id="demo-pills">
+              <button class="demo-pill" data-demo="prize">
+                <i data-lucide="gift" class="pill-icon"></i> Prize
+              </button>
+              <button class="demo-pill" data-demo="bank_kyc">
+                <i data-lucide="alert-triangle" class="pill-icon"></i> Bank Alert
+              </button>
+              <button class="demo-pill" data-demo="promo">
+                <i data-lucide="tag" class="pill-icon"></i> Promotion
+              </button>
+              <button class="demo-pill" data-demo="normal">
+                <i data-lucide="message-square" class="pill-icon"></i> Normal Message
+              </button>
+            </div>
+          </div>
+
+          <div class="submit-action-wrapper">
+            <button class="btn-primary-analyze" id="btn-analyze" aria-label="Run AI SMS Analysis">
+              <span class="btn-text">Analyze Message</span>
+              <i data-lucide="arrow-right" class="btn-arrow-icon"></i>
+              <div class="btn-spinner hidden" id="analyze-spinner"></div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time AI Analysis Processing Indicator -->
+      <div class="analysis-progress-card hidden" id="analysis-progress-card">
+        <div class="progress-header">
+          <div class="progress-title-row">
+            <i data-lucide="cpu" class="progress-icon"></i>
+            <span class="progress-heading">ANALYZING MESSAGE</span>
+          </div>
+          <span class="progress-status-badge" id="progress-status-text">Processing Pipeline...</span>
+        </div>
+        <div class="progress-steps-list">
+          <div class="progress-step-item" id="step-1">
+            <span class="step-check"><i data-lucide="check"></i></span>
+            <span class="step-label">Preparing message</span>
+          </div>
+          <div class="progress-step-item" id="step-2">
+            <span class="step-check"><i data-lucide="check"></i></span>
+            <span class="step-label">Extracting features</span>
+          </div>
+          <div class="progress-step-item" id="step-3">
+            <span class="step-check"><i data-lucide="check"></i></span>
+            <span class="step-label">Running classifier</span>
+          </div>
+          <div class="progress-step-item" id="step-4">
+            <span class="step-check"><i data-lucide="check"></i></span>
+            <span class="step-label">Preparing verdict</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- RESULT STAGE: SECURITY VERDICT & INTELLIGENCE BREAKDOWN -->
+      <!-- ============================================================= -->
+      <div class="result-stage-container hidden" id="result-stage">
+        
+        <!-- Result Mode Switcher (Normal View vs Investigation Mode) -->
+        <div class="result-header-bar">
+          <div class="result-header-left">
+            <span class="micro-label">ANALYSIS COMPLETE</span>
+            <span class="result-timestamp" id="result-timestamp">Just now</span>
+          </div>
+          <div class="mode-toggle-group" role="radiogroup" aria-label="Result View Mode">
+            <button class="mode-toggle-btn active" id="btn-mode-normal" role="radio" aria-checked="true">
+              <i data-lucide="layout"></i> NORMAL VIEW
+            </button>
+            <button class="mode-toggle-btn" id="btn-mode-investigation" role="radio" aria-checked="false">
+              <i data-lucide="binary"></i> INVESTIGATION MODE
+            </button>
+          </div>
+        </div>
+
+        <!-- PRIMARY VERDICT HERO BANNER -->
+        <div class="verdict-banner" id="verdict-banner">
+          <div class="verdict-main-col">
+            <div class="verdict-badge-row">
+              <span class="threat-level-badge" id="badge-threat-level">HIGH RISK</span>
+              <span class="verdict-classification-badge" id="badge-classification">SPAM DETECTED</span>
+            </div>
+            <h2 class="verdict-title" id="verdict-headline">SPAM MESSAGE DETECTED</h2>
+            <p class="verdict-summary" id="verdict-summary">
+              This message contains strong hallmarks of financial deception, suspicious links, and unverified promises.
+            </p>
+          </div>
+
+          <!-- Large Analytical Threat Score Module -->
+          <div class="threat-score-box" id="threat-score-box">
+            <div class="score-label-row">
+              <span class="micro-label">THREAT SCORE</span>
+              <span class="score-scale">/ 100</span>
+            </div>
+            <div class="score-number-display">
+              <span class="score-value" id="threat-score-value">94</span>
+            </div>
+            <div class="score-bar-track">
+              <div class="score-bar-fill" id="threat-score-bar" style="width: 94%;"></div>
+            </div>
+            <div class="confidence-indicator">
+              <span class="conf-label">Model Confidence:</span>
+              <span class="conf-value" id="confidence-value">97.4%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- =========================================================== -->
+        <!-- NORMAL VIEW CONTENT -->
+        <!-- =========================================================== -->
+        <div class="normal-view-wrapper" id="normal-view-content">
+
+          <!-- SIGNATURE FEATURE: MESSAGE X-RAY -->
+          <div class="feature-card xray-card" id="xray-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="crosshair"></i></div>
+                <div>
+                  <h3 class="card-title">MESSAGE X-RAY</h3>
+                  <p class="card-subtitle">Interactive token breakdown with detected risk indicators</p>
+                </div>
+              </div>
+              <div class="xray-legend" id="xray-legend">
+                <span class="legend-chip legend-prize"><span class="chip-dot"></span> Prize</span>
+                <span class="legend-chip legend-urgency"><span class="chip-dot"></span> Urgency</span>
+                <span class="legend-chip legend-money"><span class="chip-dot"></span> Money</span>
+                <span class="legend-chip legend-url"><span class="chip-dot"></span> URL</span>
+                <span class="legend-chip legend-promo"><span class="chip-dot"></span> Promotion</span>
+                <span class="legend-chip legend-cta"><span class="chip-dot"></span> Action</span>
+              </div>
+            </div>
+
+            <!-- Interactive Token Display -->
+            <div class="xray-content-box">
+              <div class="xray-token-stream" id="xray-token-stream">
+                <!-- Dynamically populated tokens with tooltip hooks -->
+              </div>
+            </div>
+
+            <!-- Selected Token Inspector Pill -->
+            <div class="xray-inspector-panel" id="xray-inspector-panel">
+              <div class="inspector-empty" id="inspector-placeholder">
+                <i data-lucide="mouse-pointer-click"></i> Click or hover on any highlighted word above to inspect its detected risk signal.
+              </div>
+              <div class="inspector-active hidden" id="inspector-details">
+                <span class="inspector-tag" id="inspector-tag">MONETARY SIGNAL</span>
+                <span class="inspector-term" id="inspector-term">"₹50,000"</span>
+                <span class="inspector-desc" id="inspector-desc">Matches monetary promise / currency value indicator.</span>
+                <span class="inspector-sev" id="inspector-sev">Severity: HIGH</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ANALYTICAL 2-COLUMN SECTION: THREAT FINGERPRINT & MESSAGE INTELLIGENCE -->
+          <div class="analysis-grid-2col">
+            
+            <!-- Column 1: Threat Fingerprint -->
+            <div class="feature-card fingerprint-card">
+              <div class="card-header-bar">
+                <div class="card-title-group">
+                  <div class="card-icon-pill"><i data-lucide="fingerprint"></i></div>
+                  <div>
+                    <h3 class="card-title">THREAT FINGERPRINT</h3>
+                    <p class="card-subtitle">Relative signal strength by threat category</p>
+                  </div>
+                </div>
+              </div>
+              <div class="fingerprint-bars" id="fingerprint-bars">
+                <!-- Populated dynamically: Monetary, Urgency, URLs, Promotional, Harvesting, Contact -->
+              </div>
+            </div>
+
+            <!-- Column 2: Message Intelligence Metrics -->
+            <div class="feature-card intelligence-card">
+              <div class="card-header-bar">
+                <div class="card-title-group">
+                  <div class="card-icon-pill"><i data-lucide="cpu"></i></div>
+                  <div>
+                    <h3 class="card-title">MESSAGE INTELLIGENCE</h3>
+                    <p class="card-subtitle">Deterministic linguistic & structural properties</p>
+                  </div>
+                </div>
+              </div>
+              <div class="metrics-grid" id="metrics-grid">
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-chars">0</span>
+                  <span class="metric-name">Characters</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-words">0</span>
+                  <span class="metric-name">Words</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-urls">0</span>
+                  <span class="metric-name">Embedded Links</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-phones">0</span>
+                  <span class="metric-name">Phone Numbers</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-keywords">0</span>
+                  <span class="metric-name">Risk Keywords</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-num" id="stat-caps">0%</span>
+                  <span class="metric-name">Capitalization</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- RECOMMENDED SECURITY ACTION -->
+          <div class="feature-card action-card" id="recommended-action-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill action-icon-pill"><i data-lucide="shield-alert" id="action-icon"></i></div>
+                <div>
+                  <h3 class="card-title" id="action-title">RECOMMENDED SECURITY PROTOCOL</h3>
+                  <p class="card-subtitle" id="action-badge">IMMEDIATE CAUTION REQUIRED</p>
+                </div>
+              </div>
+            </div>
+            <ul class="action-bullet-list" id="action-points-list">
+              <!-- Populated dynamically -->
+            </ul>
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="result-bottom-actions">
+            <button class="btn-secondary" id="btn-analyze-another">
+              <i data-lucide="plus-circle"></i> Analyze Another Message
+            </button>
+            <button class="btn-secondary" id="btn-view-in-archive">
+              <i data-lucide="archive"></i> View in Archive
+            </button>
+          </div>
+
+        </div>
+
+        <!-- =========================================================== -->
+        <!-- INVESTIGATION MODE (ML PIPELINE INSPECTOR FOR VIVA / PRESENTATION) -->
+        <!-- =========================================================== -->
+        <div class="investigation-view-wrapper hidden" id="investigation-view-content">
+          <div class="feature-card pipeline-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="git-merge"></i></div>
+                <div>
+                  <h3 class="card-title">ML PIPELINE DIAGNOSTIC TRACE</h3>
+                  <p class="card-subtitle">Step-by-step mathematical & feature transformation breakdown</p>
+                </div>
+              </div>
+              <span class="pipeline-badge">VIVA / AUDIT READY</span>
+            </div>
+
+            <div class="pipeline-flow-container" id="pipeline-flow-container">
+              
+              <!-- Pipeline Step 1: Input -->
+              <div class="pipeline-node">
+                <div class="node-marker">1</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 1</span>
+                    <h4 class="node-title">RAW SMS INGESTION</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step1-data">
+                    <div class="pipe-metrics-row">
+                      <div class="pipe-metric"><span class="pipe-metric-val">76</span><span class="pipe-metric-label">Characters</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">12</span><span class="pipe-metric-label">Words</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">UTF-8</span><span class="pipe-metric-label">Encoding</span></div>
+                    </div>
+                    <div class="pipe-code-block">"Congratulations! You have won a free cash prize. Click http://bit.ly/claim now."</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pipeline Step 2: Preprocessing -->
+              <div class="pipeline-node">
+                <div class="node-marker">2</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 2</span>
+                    <h4 class="node-title">TEXT PREPROCESSING & NORMALIZATION</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step2-data">
+                    <p class="pipe-section-label">Applied Transformations:</p>
+                    <div class="pipe-chips-row">
+                      <span class="pipe-transform-chip">Lowercase conversion</span>
+                      <span class="pipe-transform-chip">Tokenization</span>
+                      <span class="pipe-transform-chip">Stop word removal</span>
+                      <span class="pipe-transform-chip">N-gram extraction (range: 1–2)</span>
+                      <span class="pipe-transform-chip">Sublinear TF scaling: 1 + log(TF)</span>
+                      <span class="pipe-transform-chip">L2 norm normalization</span>
+                    </div>
+                    <p class="pipe-section-label" style="margin-top: 10px;">Normalized Output:</p>
+                    <div class="pipe-code-block">congratulations you have won a free cash prize click http://bit.ly/claim now</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pipeline Step 3: TF-IDF -->
+              <div class="pipeline-node">
+                <div class="node-marker">3</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 3</span>
+                    <h4 class="node-title">TF-IDF FEATURE VECTOR EXTRACTION</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step3-data">
+                    <div class="pipe-metrics-row">
+                      <div class="pipe-metric"><span class="pipe-metric-val">5,000</span><span class="pipe-metric-label">Total Vocabulary</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">6</span><span class="pipe-metric-label">Active Features</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">1–2</span><span class="pipe-metric-label">N-Gram Range</span></div>
+                    </div>
+                    <table class="table-terms">
+                      <thead>
+                        <tr>
+                          <th>Extracted N-Gram</th>
+                          <th>TF-IDF Weight</th>
+                          <th>Log-Likelihood Ratio</th>
+                          <th>Indicates</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td class="term-cell">congratulations</td>
+                          <td class="mono-cell">0.4821</td>
+                          <td class="mono-cell" style="color: var(--threat-danger-soft);">+4.120</td>
+                          <td><span class="archive-badge badge-spam">SPAM</span></td>
+                        </tr>
+                        <tr>
+                          <td class="term-cell">cash prize</td>
+                          <td class="mono-cell">0.5120</td>
+                          <td class="mono-cell" style="color: var(--threat-danger-soft);">+3.890</td>
+                          <td><span class="archive-badge badge-spam">SPAM</span></td>
+                        </tr>
+                        <tr>
+                          <td class="term-cell">won</td>
+                          <td class="mono-cell">0.3950</td>
+                          <td class="mono-cell" style="color: var(--threat-danger-soft);">+3.210</td>
+                          <td><span class="archive-badge badge-spam">SPAM</span></td>
+                        </tr>
+                        <tr>
+                          <td class="term-cell">claim</td>
+                          <td class="mono-cell">0.3410</td>
+                          <td class="mono-cell" style="color: var(--threat-danger-soft);">+2.980</td>
+                          <td><span class="archive-badge badge-spam">SPAM</span></td>
+                        </tr>
+                        <tr>
+                          <td class="term-cell">free</td>
+                          <td class="mono-cell">0.2980</td>
+                          <td class="mono-cell" style="color: var(--threat-danger-soft);">+2.640</td>
+                          <td><span class="archive-badge badge-spam">SPAM</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pipeline Step 4: Naive Bayes -->
+              <div class="pipeline-node">
+                <div class="node-marker">4</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 4</span>
+                    <h4 class="node-title">MULTINOMIAL NAIVE BAYES INFERENCE</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step4-data">
+                    <div class="pipe-metrics-row">
+                      <div class="pipe-metric"><span class="pipe-metric-val">Multinomial Naive Bayes</span><span class="pipe-metric-label">Algorithm</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">α = 0.1</span><span class="pipe-metric-label">Laplace Smoothing</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">argmax</span><span class="pipe-metric-label">Decision Rule</span></div>
+                    </div>
+                    <p class="pipe-section-label" style="margin-top: 10px;">Prior Class Probabilities (from training data):</p>
+                    <div class="pipe-prob-bars">
+                      <div class="pipe-prob-row">
+                        <span class="pipe-prob-label">P(Spam)</span>
+                        <div class="pipe-prob-track"><div class="pipe-prob-fill pipe-prob-danger" style="width: 13.4%;"></div></div>
+                        <span class="pipe-prob-value">13.4%</span>
+                      </div>
+                      <div class="pipe-prob-row">
+                        <span class="pipe-prob-label">P(Legitimate)</span>
+                        <div class="pipe-prob-track"><div class="pipe-prob-fill pipe-prob-safe" style="width: 86.6%;"></div></div>
+                        <span class="pipe-prob-value">86.6%</span>
+                      </div>
+                    </div>
+                    <p class="pipe-section-label" style="margin-top: 12px;">Posterior Probabilities (after seeing features):</p>
+                    <div class="pipe-prob-bars">
+                      <div class="pipe-prob-row">
+                        <span class="pipe-prob-label">P(Spam | Message)</span>
+                        <div class="pipe-prob-track"><div class="pipe-prob-fill pipe-prob-danger" style="width: 99.8%;"></div></div>
+                        <span class="pipe-prob-value pipe-prob-mono">99.82%</span>
+                      </div>
+                      <div class="pipe-prob-row">
+                        <span class="pipe-prob-label">P(Legitimate | Message)</span>
+                        <div class="pipe-prob-track"><div class="pipe-prob-fill pipe-prob-safe" style="width: 0.18%;"></div></div>
+                        <span class="pipe-prob-value pipe-prob-mono">0.18%</span>
+                      </div>
+                    </div>
+                    <div class="pipe-decision-box decision-spam">
+                      <strong>ML Decision:</strong> <span>SPAM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pipeline Step 5: Risk Engine -->
+              <div class="pipeline-node">
+                <div class="node-marker">5</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 5</span>
+                    <h4 class="node-title">DETERMINISTIC THREAT SIGNAL ENGINE</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step5-data">
+                    <div class="pipe-metrics-row">
+                      <div class="pipe-metric"><span class="pipe-metric-val">4</span><span class="pipe-metric-label">Signals Detected</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">95 / 100</span><span class="pipe-metric-label">Threat Score</span></div>
+                      <div class="pipe-metric"><span class="pipe-metric-val">HIGH RISK</span><span class="pipe-metric-label">Threat Level</span></div>
+                    </div>
+                    <p class="pipe-section-label" style="margin-top: 10px;">Detected Risk Categories:</p>
+                    <div class="pipe-chips-row">
+                      <span class="pipe-signal-badge">Prize / Reward (99%)</span>
+                      <span class="pipe-signal-badge">Suspicious Link (97%)</span>
+                      <span class="pipe-signal-badge">Financial / Currency (75%)</span>
+                      <span class="pipe-signal-badge">Call to Action (75%)</span>
+                    </div>
+                    <p class="pipe-section-label" style="margin-top: 10px;">Aggregated Threat Meter:</p>
+                    <div class="pipe-prob-bars">
+                      <div class="pipe-prob-row">
+                        <span class="pipe-prob-label">Score</span>
+                        <div class="pipe-prob-track"><div class="pipe-prob-fill pipe-prob-danger" style="width: 95%;"></div></div>
+                        <span class="pipe-prob-value pipe-prob-mono">95%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pipeline Step 6: Final Verdict -->
+              <div class="pipeline-node">
+                <div class="node-marker">6</div>
+                <div class="node-content">
+                  <div class="node-header">
+                    <span class="node-step-tag">STEP 6</span>
+                    <h4 class="node-title">FINAL VERDICT & THREAT SCORE SYNTHESIS</h4>
+                  </div>
+                  <div class="node-data-box" id="pipe-step6-data">
+                    <div class="pipe-verdict-banner verdict-banner-spam">
+                      <div class="pipe-verdict-main">
+                        <span class="pipe-verdict-label">⛔ SYSTEM VERDICT</span>
+                        <span class="pipe-verdict-text">SPAM</span>
+                      </div>
+                      <div class="pipe-verdict-meta">
+                        <span>Confidence: <strong>99.8%</strong></span>
+                        <span>Threat Score: <strong>95/100</strong></span>
+                        <span>Level: <strong>HIGH RISK</strong></span>
+                      </div>
+                    </div>
+                    <div class="pipe-agreement-row">
+                      <span class="pipe-agreement-dot agree-yes"></span>
+                      <span>Dual-Engine Agreement: <strong>ML + Heuristics AGREE (High Confidence Threat)</strong></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 2: ARCHIVE (HISTORICAL INVESTIGATIONS) -->
+    <!-- ================================================================= -->
+    <section class="view-panel" id="view-archive" role="tabpanel" aria-labelledby="tab-archive">
+      
+      <header class="view-header">
+        <div class="view-title-group">
+          <div class="hero-eyebrow">
+            <i data-lucide="database" class="eyebrow-icon"></i>
+            <span>PERSISTENT AUDIT TRAIL</span>
+          </div>
+          <h1 class="view-headline">Investigation Archive</h1>
+          <p class="view-subtext">Review past SMS threat evaluations, confidence ratings, and intelligence fingerprints.</p>
+        </div>
+        <div class="archive-header-actions">
+          <button class="btn-secondary btn-danger-subtle" id="btn-clear-archive" title="Clear all records">
+            <i data-lucide="trash-2"></i> Clear Archive
+          </button>
+        </div>
+      </header>
+
+      <!-- Archive Filter & Search Toolbar -->
+      <div class="archive-toolbar">
+        <div class="search-input-wrapper">
+          <i data-lucide="search" class="search-icon"></i>
+          <input
+            type="text"
+            id="archive-search"
+            class="archive-search-input"
+            placeholder="Search by keywords, sender, content..."
+            aria-label="Search investigations"
+          >
+        </div>
+
+        <div class="filter-controls-group">
+          <!-- Filter by Risk Level -->
+          <div class="filter-select-wrapper">
+            <label for="filter-risk" class="filter-label">Risk:</label>
+            <select id="filter-risk" class="filter-select">
+              <option value="ALL">All Risk Levels</option>
+              <option value="HIGH RISK">High Risk</option>
+              <option value="MEDIUM RISK">Medium Risk</option>
+              <option value="LOW RISK">Low Risk</option>
+            </select>
+          </div>
+
+          <!-- Filter by Verdict Type -->
+          <div class="filter-select-wrapper">
+            <label for="filter-type" class="filter-label">Type:</label>
+            <select id="filter-type" class="filter-select">
+              <option value="ALL">All Types</option>
+              <option value="SPAM">Spam Only</option>
+              <option value="HAM">Legitimate Only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Investigations Grid / List -->
+      <div class="archive-list-container" id="archive-list-container">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Archive Pagination Controls -->
+      <div class="archive-pagination-bar hidden" id="archive-pagination-bar">
+        <div class="pagination-info" id="pagination-info">Showing 1-20 of 0 records</div>
+        <div class="pagination-actions">
+          <button class="btn-secondary btn-pagination" id="btn-pagination-prev" disabled>
+            <i data-lucide="chevron-left"></i> Previous
+          </button>
+          <span class="pagination-page-indicator" id="pagination-page-indicator">Page 1</span>
+          <button class="btn-secondary btn-pagination" id="btn-pagination-next" disabled>
+            Next <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Empty State for Archive -->
+      <div class="empty-state-card hidden" id="archive-empty-state">
+        <div class="empty-icon-wrap">
+          <i data-lucide="inbox" class="empty-icon"></i>
+        </div>
+        <h3 class="empty-title">No investigations yet</h3>
+        <p class="empty-desc">Analyze suspicious SMS messages in the Scan console to build your persistent intelligence archive.</p>
+        <button class="btn-primary-small" id="btn-empty-goto-scan">
+          Go to Scan Console →
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- VIEW 3: INSIGHTS (ANALYTICS & AGGREGATE THREAT METRICS) -->
+    <!-- ================================================================= -->
+    <!-- VIEW 3: INSIGHTS (REAL-TIME SQLITE TELEMETRY & THREAT ANALYTICS) -->
+    <!-- ================================================================= -->
+    <section class="view-panel" id="view-insights" role="tabpanel" aria-labelledby="tab-insights">
+      
+      <header class="view-header">
+        <div class="view-title-group">
+          <div class="hero-eyebrow">
+            <span class="pulse-live-dot"></span>
+            <span>LIVE DATA</span>
+          </div>
+          <h1 class="view-headline">INSIGHTS</h1>
+          <p class="view-subtext">Understand what the system is detecting.</p>
+        </div>
+        <div class="insights-header-actions">
+          <button class="btn-secondary" id="btn-refresh-insights">
+            <i data-lucide="refresh-cw"></i> Refresh Data
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Insights Content Container -->
+      <div id="insights-content-container">
+        
+        <!-- Primary 4 Top Metrics -->
+        <div class="insights-summary-grid">
+          <div class="summary-card">
+            <div class="summary-card-header">
+              <span class="micro-label">TOTAL ANALYSES</span>
+              <i data-lucide="message-square" class="summary-icon"></i>
+            </div>
+            <div class="summary-value" id="insight-total-count">0</div>
+            <div class="summary-meta">Total database records</div>
+          </div>
+
+          <div class="summary-card card-threat-alert">
+            <div class="summary-card-header">
+              <span class="micro-label">SPAM DETECTED</span>
+              <i data-lucide="shield-alert" class="summary-icon icon-danger"></i>
+            </div>
+            <div class="summary-value text-danger" id="insight-spam-count">0</div>
+            <div class="summary-meta">Verified spam messages</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-card-header">
+              <span class="micro-label">NOT SPAM</span>
+              <i data-lucide="shield-check" class="summary-icon icon-safe"></i>
+            </div>
+            <div class="summary-value text-safe" id="insight-ham-count">0</div>
+            <div class="summary-meta">Legitimate messages</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-card-header">
+              <span class="micro-label">SPAM RATE</span>
+              <i data-lucide="percent" class="summary-icon"></i>
+            </div>
+            <div class="summary-value" id="insight-spam-rate">0.0%</div>
+            <div class="summary-meta">Proportion of spam records</div>
+          </div>
+        </div>
+
+        <!-- Secondary Average Metrics Row -->
+        <div class="insights-secondary-metrics-grid">
+          <div class="secondary-metric-card">
+            <div class="secondary-metric-left">
+              <span class="micro-label">AVERAGE MODEL CONFIDENCE</span>
+              <div class="secondary-metric-val" id="insight-avg-confidence">—</div>
+            </div>
+            <div class="secondary-metric-desc">Mean classification certainty across analyzed communications</div>
+          </div>
+
+          <div class="secondary-metric-card">
+            <div class="secondary-metric-left">
+              <span class="micro-label">AVERAGE THREAT SCORE</span>
+              <div class="secondary-metric-val" id="insight-avg-threat">—</div>
+            </div>
+            <div class="secondary-metric-desc">Mean calculated threat severity on a 0–100 scale</div>
+          </div>
+        </div>
+
+        <!-- Charts 2-Column Grid -->
+        <div class="insights-charts-grid">
+          
+          <!-- Detection Activity Area/Bar Chart -->
+          <div class="feature-card chart-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="activity"></i></div>
+                <div>
+                  <h3 class="card-title">DETECTION ACTIVITY</h3>
+                  <p class="card-subtitle">Daily count of total, spam, and legitimate messages</p>
+                </div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrapper">
+              <canvas id="chart-activity"></canvas>
+            </div>
+          </div>
+
+          <!-- Classification & Threat Severity Distribution -->
+          <div class="feature-card chart-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="pie-chart"></i></div>
+                <div>
+                  <h3 class="card-title">THREAT DISTRIBUTION</h3>
+                  <p class="card-subtitle">Low (0–33), Medium (34–66), High Risk (67–100)</p>
+                </div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrapper chart-donut-wrapper">
+              <canvas id="chart-distribution"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Analytical Row: Top Risk Indicators & Recent Activity -->
+        <div class="insights-bottom-grid">
+          
+          <!-- Most Common Risk Indicators -->
+          <div class="feature-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="bar-chart-2"></i></div>
+                <div>
+                  <h3 class="card-title">MOST COMMON RISK INDICATORS</h3>
+                  <p class="card-subtitle">Number of analyses containing each indicator</p>
+                </div>
+              </div>
+            </div>
+            <div class="ranked-signals-list" id="insights-ranked-signals">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Recent Activity Stream -->
+          <div class="feature-card">
+            <div class="card-header-bar">
+              <div class="card-title-group">
+                <div class="card-icon-pill"><i data-lucide="clock"></i></div>
+                <div>
+                  <h3 class="card-title">RECENT ACTIVITY</h3>
+                  <p class="card-subtitle">Latest chronological detection events</p>
+                </div>
+              </div>
+            </div>
+            <div class="incident-stream-list" id="insights-recent-stream">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Empty State for Insights -->
+      <div class="empty-state-card hidden" id="insights-empty-state">
+        <div class="empty-icon-wrap">
+          <i data-lucide="bar-chart-3" class="empty-icon"></i>
+        </div>
+        <h3 class="empty-title">NO INSIGHTS YET</h3>
+        <p class="empty-desc">Analyze a few SMS messages to generate system insights.</p>
+        <button class="btn-primary-small" id="btn-insights-goto-scan">
+          Go to Scan Console →
+        </button>
+      </div>
+
+      <!-- Error State for Insights -->
+      <div class="empty-state-card hidden" id="insights-error-state">
+        <div class="empty-icon-wrap" style="background: rgba(239, 68, 68, 0.15); color: var(--threat-danger);">
+          <i data-lucide="alert-triangle" class="empty-icon"></i>
+        </div>
+        <h3 class="empty-title">Unable to load insights</h3>
+        <p class="empty-desc">Could not retrieve live telemetry from the database. Please try again.</p>
+        <button class="btn-secondary" id="btn-insights-retry">
+          <i data-lucide="refresh-cw"></i> Retry
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: MODEL TECHNICAL DIAGNOSTICS & STATUS -->
+  <!-- ================================================================= -->
+  <div class="modal-overlay hidden" id="modal-model-info" role="dialog" aria-modal="true" aria-labelledby="modal-model-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="status-pulse-dot"></div>
+          <h3 class="modal-title" id="modal-model-title">AI MODEL ARCHITECTURE</h3>
+        </div>
+        <button class="btn-modal-close" id="btn-close-model-modal" aria-label="Close modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-model-body">
+        <div class="model-stats-grid">
+          <div class="model-stat-item">
+            <span class="micro-label">PRIMARY CLASSIFIER</span>
+            <span class="model-stat-val" id="mod-type">Multinomial Naive Bayes</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">FEATURE EXTRACTOR</span>
+            <span class="model-stat-val" id="mod-vectorizer">TF-IDF (1-2 N-Grams)</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">TEST ACCURACY</span>
+            <span class="model-stat-val text-safe" id="mod-acc">98.35%</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">PRECISION (SPAM)</span>
+            <span class="model-stat-val text-safe" id="mod-prec">96.25%</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">RECALL (SPAM)</span>
+            <span class="model-stat-val" id="mod-rec">92.22%</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">F1-SCORE</span>
+            <span class="model-stat-val" id="mod-f1">94.19%</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">VOCABULARY SIZE</span>
+            <span class="model-stat-val" id="mod-vocab">5,000 Features</span>
+          </div>
+          <div class="model-stat-item">
+            <span class="micro-label">TRAINING DATASET</span>
+            <span class="model-stat-val" id="mod-samples">5,754 SMS Messages</span>
+          </div>
+        </div>
+
+        <div class="top-features-section">
+          <span class="micro-label">TOP INFORMATIVE SPAM TOKENS</span>
+          <div class="feature-pills-cloud" id="mod-top-features">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="modal-note">Trained with Scikit-learn • Serialized with Joblib</span>
+        <button class="btn-primary-small" id="btn-modal-dismiss">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- DRAWER: ARCHIVE RECORD DETAIL INSPECTOR -->
+  <!-- ================================================================= -->
+  <div class="drawer-overlay hidden" id="drawer-archive-detail" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <span class="micro-label">INVESTIGATION RECORD</span>
+          <h3 class="drawer-title" id="drawer-title">Scan #00</h3>
+        </div>
+        <button class="btn-modal-close" id="btn-close-drawer" aria-label="Close detail drawer">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="drawer-body" id="drawer-body-content">
+        <!-- Populated dynamically with full X-Ray, Pipeline Trace, and Stats -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL: CONFIRM ACTION DIALOG -->
+  <!-- ================================================================= -->
+  <div class="modal-overlay hidden" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+    <div class="modal-card modal-card-small">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <i data-lucide="alert-triangle" style="color: var(--threat-danger-soft); width: 18px; height: 18px;"></i>
+          <h3 class="modal-title" id="confirm-modal-title">Confirm Deletion</h3>
+        </div>
+        <button class="btn-modal-close" id="btn-close-confirm-modal" aria-label="Cancel">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-modal-message" style="color: var(--text-primary); font-size: 0.92rem; line-height: 1.5;">
+          Are you sure you want to delete this record? This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn-secondary" id="btn-confirm-cancel">Cancel</button>
+        <button class="btn-danger-solid" id="btn-confirm-execute">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- Application Logic Scripts -->
+  <script src="./static/js/app.js"></script>
+</body>
+</html>

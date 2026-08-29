@@ -1,0 +1,116 @@
+{
+  "model_type": "Multinomial Naive Bayes",
+  "alpha": 0.1,
+  "vectorizer_type": "TF-IDF Vectorizer",
+  "ngram_range": [
+    1,
+    2
+  ],
+  "max_features": 5000,
+  "vocabulary_size": 5000,
+  "total_dataset_size": 5754,
+  "train_samples": 4603,
+  "test_samples": 1151,
+  "metrics": {
+    "accuracy": 98.35,
+    "precision": 96.25,
+    "recall": 92.22,
+    "f1_score": 94.19,
+    "confusion_matrix": [
+      [
+        978,
+        6
+      ],
+      [
+        13,
+        154
+      ]
+    ]
+  },
+  "classes": [
+    "ham",
+    "spam"
+  ],
+  "top_spam_features": [
+    {
+      "feature": "claim",
+      "log_ratio": 6.152
+    },
+    {
+      "feature": "prize",
+      "log_ratio": 5.921
+    },
+    {
+      "feature": "150p",
+      "log_ratio": 5.634
+    },
+    {
+      "feature": "guaranteed",
+      "log_ratio": 5.414
+    },
+    {
+      "feature": "500",
+      "log_ratio": 5.311
+    },
+    {
+      "feature": "alert",
+      "log_ratio": 5.297
+    },
+    {
+      "feature": "1000",
+      "log_ratio": 5.27
+    },
+    {
+      "feature": "tone",
+      "log_ratio": 5.23
+    },
+    {
+      "feature": "ringtone",
+      "log_ratio": 5.204
+    },
+    {
+      "feature": "cs",
+      "log_ratio": 5.199
+    },
+    {
+      "feature": "http",
+      "log_ratio": 5.187
+    },
+    {
+      "feature": "awarded",
+      "log_ratio": 5.177
+    },
+    {
+      "feature": "150ppm",
+      "log_ratio": 5.059
+    },
+    {
+      "feature": "dating",
+      "log_ratio": 4.908
+    },
+    {
+      "feature": "800",
+      "log_ratio": 4.873
+    },
+    {
+      "feature": "collection",
+      "log_ratio": 4.87
+    },
+    {
+      "feature": "tones",
+      "log_ratio": 4.85
+    },
+    {
+      "feature": "national",
+      "log_ratio": 4.849
+    },
+    {
+      "feature": "urgent alert",
+      "log_ratio": 4.83
+    },
+    {
+      "feature": "5000",
+      "log_ratio": 4.824
+    }
+  ]
+}

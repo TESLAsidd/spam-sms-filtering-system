@@ -1,0 +1,41 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+.appdeploy
+
+# Database runtime temporary artifacts
+*.db
+*.sqlite
+*.sqlite3
+database/*.db
+database/*.db-journal
+*.db.bak
+
+# OS & IDE metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel Build Artifacts
+.vercel/
+
+# Ensure required ML artifacts and configs are tracked
+!model/spam_classifier.pkl
+!model/metadata.json
+!model/model_comparison.json
