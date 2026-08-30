@@ -55,6 +55,50 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
+class VercelWSGIMiddleware:
+    """
+    WSGI Middleware to normalize PATH_INFO on Vercel deployments.
+    When Vercel rewrites incoming requests to /api/index.py,
+    the client's true requested path is provided in headers like x-matched-path or x-forwarded-uri.
+    This middleware extracts the real client path and sets environ['PATH_INFO']
+    so Flask routing matches the intended route seamlessly.
+    """
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        matched = (
+            environ.get("HTTP_X_MATCHED_PATH")
+            or environ.get("HTTP_X_FORWARDED_URI")
+            or environ.get("HTTP_X_VERCEL_PATH")
+            or environ.get("HTTP_X_ORIGINAL_URI")
+            or environ.get("HTTP_X_REWRITE_URL")
+        )
+
+        if matched:
+            path_only = matched.split("?")[0]
+            environ["PATH_INFO"] = path_only
+        else:
+            path_info = environ.get("PATH_INFO", "")
+            if path_info.startswith("/api/index.py"):
+                stripped = path_info[len("/api/index.py"):]
+                environ["PATH_INFO"] = stripped if stripped.startswith("/") else ("/" + stripped)
+            elif path_info.startswith("/api/index"):
+                stripped = path_info[len("/api/index"):]
+                environ["PATH_INFO"] = stripped if stripped.startswith("/") else ("/" + stripped)
+            elif path_info in ("/api", "/api/"):
+                environ["PATH_INFO"] = "/"
+
+        return self.wsgi_app(environ, start_response)
+
+# Apply Vercel path normalization middleware to Flask WSGI callable
+app.wsgi_app = VercelWSGIMiddleware(app.wsgi_app)
+
+# Expose WSGI handler aliases for all serverless WSGI runners
+application = app
+handler = app
+
 # Initialize OAuth client providers
 init_oauth(app)
 
@@ -657,6 +701,29 @@ def index():
         return redirect(url_for("login_page"))
         
     return render_template("index.html")
+
+@app.route("/api/index.py", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api/index", methods=["GET", "POST", "OPTIONS"])
+@app.route("/api", methods=["GET", "POST", "OPTIONS"])
+def vercel_entrypoint_fallback():
+    """Fallback handler in case Vercel rewrites directly to entrypoint without headers."""
+    original_path = (
+        request.headers.get("x-matched-path")
+        or request.headers.get("x-forwarded-uri")
+        or request.headers.get("x-vercel-path")
+        or request.headers.get("x-original-uri")
+    )
+    if original_path:
+        path_only = original_path.split("?")[0]
+        if path_only not in ("/api/index.py", "/api/index", "/api", "/api/"):
+            adapter = app.url_map.bind_to_environ(request.environ)
+            try:
+                endpoint, values = adapter.match(path_only, method=request.method)
+                return app.view_functions[endpoint](**values)
+            except Exception:
+                pass
+
+    return index()
 
 @app.route("/api/health", methods=["GET"])
 def api_health():

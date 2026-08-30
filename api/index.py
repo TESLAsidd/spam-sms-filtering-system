@@ -57,6 +57,10 @@ class VercelWSGIMiddleware:
 # Wrap Flask WSGI callable with path normalization middleware
 app.wsgi_app = VercelWSGIMiddleware(app.wsgi_app)
 
+# Expose WSGI handler aliases
+handler = app
+application = app
+
 # Vercel serverless function entrypoint
 if __name__ == "__main__":
     app.run()
