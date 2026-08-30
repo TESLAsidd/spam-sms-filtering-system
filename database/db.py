@@ -54,6 +54,11 @@ def get_active_database_type() -> str:
     return "sqlite"
 
 
+def is_supabase_configured() -> bool:
+    """Return whether Supabase has valid credentials configured."""
+    return supabase_backend.is_supabase_configured()
+
+
 def get_backend():
     """Return the active database backend module."""
     if get_active_database_type() == "supabase":

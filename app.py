@@ -22,6 +22,7 @@ from auth.oauth_service import (
 from database.db import (
     init_db,
     get_active_database_type,
+    is_supabase_configured,
     create_user,
     get_user_by_email,
     get_user_by_id,
@@ -755,6 +756,8 @@ def api_health():
         "version": "1.0.0",
         "model_loaded": is_model_loaded,
         "database_engine": db_engine,
+        "database_type_env": (os.environ.get("DATABASE_TYPE") or "unset").lower(),
+        "supabase_configured": is_supabase_configured(),
         "artifact": "model/spam_classifier.pkl"
     }), 200
 
