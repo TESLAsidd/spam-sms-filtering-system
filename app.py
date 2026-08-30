@@ -975,6 +975,8 @@ def handle_404(e):
     """Handle 404 errors cleanly without stack traces."""
     if request.path.startswith("/api/"):
         return jsonify({"error": "Endpoint not found."}), 404
+    if not session.get("user_id"):
+        return redirect(url_for("login_page"))
     return render_template("index.html"), 404
 
 @app.errorhandler(413)
