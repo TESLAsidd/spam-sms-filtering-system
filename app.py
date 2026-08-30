@@ -21,6 +21,7 @@ from auth.oauth_service import (
 )
 from database.db import (
     init_db,
+    get_active_database_type,
     create_user,
     get_user_by_email,
     get_user_by_id,
@@ -747,11 +748,13 @@ def vercel_entrypoint_fallback():
 def api_health():
     """Health check endpoint for API consumers."""
     is_model_loaded = PIPELINE is not None
+    db_engine = get_active_database_type()
     return jsonify({
         "status": "online",
         "service": "SMS Sentinel — Spam SMS Filtering API",
         "version": "1.0.0",
         "model_loaded": is_model_loaded,
+        "database_engine": db_engine,
         "artifact": "model/spam_classifier.pkl"
     }), 200
 

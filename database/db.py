@@ -23,22 +23,34 @@ def get_active_database_type() -> str:
     """
     Determine the active database engine based on environment configuration.
     Returns 'supabase' or 'sqlite'.
+    Strictly prohibits silent SQLite fallback when Supabase is requested or in production.
     """
     db_type = (os.environ.get("DATABASE_TYPE") or "").strip().lower()
 
     if db_type in ("supabase", "postgres", "postgresql"):
-        if supabase_backend.is_supabase_configured():
-            return "supabase"
-        else:
-            logger.warning(
-                "DATABASE_TYPE is set to 'supabase' but SUPABASE_URL/SUPABASE_KEY are not configured. "
-                "Falling back to local SQLite engine."
+        if not supabase_backend.is_supabase_configured():
+            raise RuntimeError(
+                "DATABASE CONFIGURATION ERROR: DATABASE_TYPE is configured as 'supabase', "
+                "but SUPABASE_URL or SUPABASE_KEY is missing or invalid. "
+                "Production mode strictly prohibits silent fallback to SQLite."
             )
-            return "sqlite"
-
-    if supabase_backend.is_supabase_configured() and os.environ.get("VERCEL"):
         return "supabase"
 
+    if db_type == "sqlite":
+        return "sqlite"
+
+    # In production environments (Vercel / Cloud), require explicit configuration
+    if os.environ.get("VERCEL") or os.environ.get("FLASK_ENV") == "production":
+        if supabase_backend.is_supabase_configured():
+            return "supabase"
+        # If neither Supabase is configured nor DATABASE_TYPE=sqlite is explicitly set
+        logger.warning(
+            "Production environment detected without Supabase credentials. "
+            "Using SQLite serverless temporary storage. Set DATABASE_TYPE=supabase with credentials for persistent storage."
+        )
+        return "sqlite"
+
+    # Default for local development
     return "sqlite"
 
 

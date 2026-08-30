@@ -1,36 +1,56 @@
 """
-SMS SENTINEL — Database Backends & Contract Test Suite
+SMS SENTINEL — Database Backends & Production Hardening Test Suite
 Validates database operations, multi-user isolation, JSON serialization,
-query filtering, pagination, and insights aggregation across backends.
+query filtering, pagination, health diagnostics, and strict failure on invalid Supabase config.
 """
 
 import os
 import unittest
 import uuid
+import json
 
-# Ensure local testing runs with SQLite backend
+# Ensure testing runs with SQLite backend initially
 os.environ["DATABASE_TYPE"] = "sqlite"
 
 from database import db, sqlite_backend, supabase_backend
+from app import app
 
 
 class TestDatabaseBackends(unittest.TestCase):
 
     def setUp(self):
         """Prepare fresh test credentials for user isolation testing."""
+        os.environ["DATABASE_TYPE"] = "sqlite"
         self.user_a_uid = uuid.uuid4().hex[:8]
         self.user_a_email = f"user_a_{self.user_a_uid}@test.local"
         self.user_b_uid = uuid.uuid4().hex[:8]
         self.user_b_email = f"user_b_{self.user_b_uid}@test.local"
+        self.client = app.test_client()
 
     def test_01_engine_detection(self):
-        """Verify engine detection logic."""
+        """Verify engine detection logic for explicit sqlite."""
+        os.environ["DATABASE_TYPE"] = "sqlite"
         self.assertEqual(db.get_active_database_type(), "sqlite")
 
-        # Test config check
-        self.assertFalse(supabase_backend.is_supabase_configured())
+    def test_02_strict_supabase_failure_without_silent_fallback(self):
+        """
+        Verify that when DATABASE_TYPE='supabase' but credentials are missing,
+        the system FAILS CLEARLY with RuntimeError and DOES NOT silently fall back to SQLite.
+        """
+        os.environ["DATABASE_TYPE"] = "supabase"
+        os.environ.pop("SUPABASE_URL", None)
+        os.environ.pop("SUPABASE_KEY", None)
 
-    def test_02_user_crud_and_isolation(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            db.get_active_database_type()
+        
+        self.assertIn("DATABASE CONFIGURATION ERROR", str(ctx.exception))
+        self.assertIn("Production mode strictly prohibits silent fallback to SQLite", str(ctx.exception))
+
+        # Restore
+        os.environ["DATABASE_TYPE"] = "sqlite"
+
+    def test_03_user_crud_and_isolation(self):
         """Verify user creation, lookup, and password protection."""
         user_a_id = db.create_user("User Alpha", self.user_a_email, "hash_alpha_123")
         self.assertIsInstance(user_a_id, int)
@@ -50,7 +70,7 @@ class TestDatabaseBackends(unittest.TestCase):
         self.assertEqual(user_a_by_id["id"], user_a_id)
         self.assertNotIn("password_hash", user_a_by_id)
 
-    def test_03_oauth_identity_linking(self):
+    def test_04_oauth_identity_linking(self):
         """Verify OAuth identity linking and resolution."""
         user_id = db.create_user("OAuth Tester", f"oauth_{self.user_a_uid}@test.local", "")
         
@@ -69,7 +89,7 @@ class TestDatabaseBackends(unittest.TestCase):
         self.assertEqual(len(identities), 1)
         self.assertEqual(identities[0]["provider"], "github")
 
-    def test_04_analyses_storage_and_multi_user_isolation(self):
+    def test_05_analyses_storage_and_multi_user_isolation(self):
         """Verify analyses CRUD and strict user data isolation."""
         user_a_id = db.create_user("User A", self.user_a_email, "hash_a")
         user_b_id = db.create_user("User B", self.user_b_email, "hash_b")
@@ -173,6 +193,21 @@ class TestDatabaseBackends(unittest.TestCase):
         delete_success = db.delete_analysis(rec_a1, user_id=user_a_id)
         self.assertTrue(delete_success)
         self.assertEqual(db.get_analyses(user_id=user_a_id)["total"], 1)
+
+    def test_06_health_endpoint_response(self):
+        """Verify /api/health exposes database_engine without leaking secrets."""
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["status"], "online")
+        self.assertTrue(data["model_loaded"])
+        self.assertEqual(data["database_engine"], "sqlite")
+
+        # Security check: verify no secrets leaked
+        res_str = response.get_data(as_text=True)
+        self.assertNotIn("SUPABASE_KEY", res_str)
+        self.assertNotIn("SECRET_KEY", res_str)
+        self.assertNotIn("service_role", res_str)
 
 
 if __name__ == "__main__":
