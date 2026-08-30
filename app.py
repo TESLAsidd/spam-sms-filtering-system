@@ -58,9 +58,8 @@ app = Flask(
 class VercelWSGIMiddleware:
     """
     WSGI Middleware to normalize PATH_INFO on Vercel deployments.
-    When Vercel rewrites incoming requests to /api/index.py,
-    the client's true requested path is provided in headers like x-matched-path or x-forwarded-uri.
-    This middleware extracts the real client path and sets environ['PATH_INFO']
+    When Vercel rewrites incoming requests to /api/index.py?__vercel_path=/$1,
+    this middleware extracts the real client path and sets environ['PATH_INFO']
     so Flask routing matches the intended route seamlessly.
     """
 
@@ -68,6 +67,22 @@ class VercelWSGIMiddleware:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
+        # 1. Check query string for __vercel_path parameter
+        query_string = environ.get("QUERY_STRING", "")
+        if "__vercel_path=" in query_string:
+            import urllib.parse
+            params = urllib.parse.parse_qs(query_string)
+            if "__vercel_path" in params and params["__vercel_path"]:
+                target_path = params["__vercel_path"][0]
+                if not target_path.startswith("/"):
+                    target_path = "/" + target_path
+                # Clean up query string so Flask and views see only user query params
+                remaining = {k: v for k, v in params.items() if k != "__vercel_path"}
+                environ["QUERY_STRING"] = urllib.parse.urlencode(remaining, doseq=True)
+                environ["PATH_INFO"] = target_path
+                return self.wsgi_app(environ, start_response)
+
+        # 2. Check Vercel routing headers
         matched = (
             environ.get("HTTP_X_MATCHED_PATH")
             or environ.get("HTTP_X_FORWARDED_URI")

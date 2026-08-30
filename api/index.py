@@ -6,6 +6,7 @@ Includes WSGI middleware to normalize PATH_INFO when requests are rewritten by V
 
 import os
 import sys
+import urllib.parse
 
 # Add repository root to system path so existing app, model, and database modules import cleanly
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,9 +19,8 @@ from app import app
 class VercelWSGIMiddleware:
     """
     WSGI Middleware to normalize PATH_INFO on Vercel deployments.
-    When Vercel rewrites incoming requests (e.g. /, /login, /api/predict) to /api/index.py,
-    the client's true requested path is provided in headers like x-matched-path or x-forwarded-uri.
-    This middleware extracts the real client path and sets environ['PATH_INFO']
+    When Vercel rewrites incoming requests to /api/index.py?__vercel_path=/$1,
+    this middleware extracts the real client path and sets environ['PATH_INFO']
     so Flask routing matches the intended route seamlessly.
     """
 
@@ -28,8 +28,22 @@ class VercelWSGIMiddleware:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
-        # 1. Check Vercel routing headers in priority order
-        matched_path = (
+        # 1. Check query string for __vercel_path parameter
+        query_string = environ.get("QUERY_STRING", "")
+        if "__vercel_path=" in query_string:
+            params = urllib.parse.parse_qs(query_string)
+            if "__vercel_path" in params and params["__vercel_path"]:
+                target_path = params["__vercel_path"][0]
+                if not target_path.startswith("/"):
+                    target_path = "/" + target_path
+                # Clean up query string so Flask and views see only user query params
+                remaining = {k: v for k, v in params.items() if k != "__vercel_path"}
+                environ["QUERY_STRING"] = urllib.parse.urlencode(remaining, doseq=True)
+                environ["PATH_INFO"] = target_path
+                return self.wsgi_app(environ, start_response)
+
+        # 2. Check Vercel routing headers
+        matched = (
             environ.get("HTTP_X_MATCHED_PATH")
             or environ.get("HTTP_X_FORWARDED_URI")
             or environ.get("HTTP_X_VERCEL_PATH")
@@ -37,12 +51,10 @@ class VercelWSGIMiddleware:
             or environ.get("HTTP_X_REWRITE_URL")
         )
 
-        if matched_path:
-            # Strip any URL query parameters if present
-            path_only = matched_path.split("?")[0]
+        if matched:
+            path_only = matched.split("?")[0]
             environ["PATH_INFO"] = path_only
         else:
-            # 2. Fallback: If PATH_INFO contains the /api/index.py rewrite target, strip the prefix
             path_info = environ.get("PATH_INFO", "")
             if path_info.startswith("/api/index.py"):
                 stripped = path_info[len("/api/index.py"):]
@@ -50,6 +62,8 @@ class VercelWSGIMiddleware:
             elif path_info.startswith("/api/index"):
                 stripped = path_info[len("/api/index"):]
                 environ["PATH_INFO"] = stripped if stripped.startswith("/") else ("/" + stripped)
+            elif path_info in ("/api", "/api/"):
+                environ["PATH_INFO"] = "/"
 
         return self.wsgi_app(environ, start_response)
 
