@@ -13,15 +13,28 @@ DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.join(DB_DIR, "spamshield.db")
 
 def _get_active_db_path():
-    """Resolve database path, using /tmp on serverless environments where local filesystem is read-only."""
+    """Resolve database path, using /tmp on serverless environments or anywhere the local filesystem is read-only."""
     if (
         os.environ.get("VERCEL")
         or os.environ.get("VERCEL_ENV")
+        or os.environ.get("VERCEL_REGION")
         or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
         or os.environ.get("LAMBDA_TASK_ROOT")
+        or os.environ.get("AWS_EXECUTION_ENV")
+        or os.path.exists("/var/task")
     ):
         return os.path.join("/tmp", "spamshield.db")
-    return DEFAULT_DB_PATH
+
+    # Dynamic write permission probe
+    try:
+        os.makedirs(DB_DIR, exist_ok=True)
+        probe_path = os.path.join(DB_DIR, ".write_probe")
+        with open(probe_path, "w") as f:
+            f.write("ok")
+        os.remove(probe_path)
+        return DEFAULT_DB_PATH
+    except Exception:
+        return os.path.join("/tmp", "spamshield.db")
 
 DB_PATH = _get_active_db_path()
 
