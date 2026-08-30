@@ -263,25 +263,58 @@ Access the application dashboard at: `http://127.0.0.1:5000/`
 
 ---
 
-## 17. Database Architecture & Schema
-- **Database Engine**: SQLite 3 (`database/spamshield.db`)
-- **Table**: `analyses` (Indexed on `created_at`, `prediction`, `threat_level`, and `threat_score`).
+## 17. Database Architecture & Multi-Engine Configuration
+
+SMS Sentinel employs a modular database abstraction layer supporting two production-grade configurations:
+
+### A. Local Development (SQLite 3)
+- **Engine**: SQLite 3 (`database/spamshield.db`)
+- **Default Mode**: Selected automatically when `DATABASE_TYPE=sqlite` (or when Supabase credentials are not set).
+- **Features**: Zero external dependencies, self-healing table creation, sub-millisecond local latency.
+
+### B. Production Persistence (Supabase PostgreSQL)
+- **Engine**: Supabase PostgreSQL (PostgreSQL 15+)
+- **Mode**: Selected when `DATABASE_TYPE=supabase` with `SUPABASE_URL` and `SUPABASE_KEY` configured.
+- **Client Protocol**: Official `supabase` Python client communicating over HTTPS REST (PostgREST), eliminating connection pooling exhaustion and firewall port blocks in serverless environments.
+- **Schema File**: [`supabase_schema.sql`](file:///c:/games%202/spam%20sms%20filtering%20system/supabase_schema.sql)
+- **Features**: Multi-instance persistent storage, native `JSONB` risk signals, `TIMESTAMPTZ` audit timestamps, foreign key cascade deletion, and parameterized query execution preventing SQL injection.
+
+### Supabase Setup in 3 Simple Steps:
+1. **Create Project**: Sign up at [supabase.com](https://supabase.com) and create a new project.
+2. **Execute Migration**: Open the Supabase **SQL Editor**, paste the contents of [`supabase_schema.sql`](file:///c:/games%202/spam%20sms%20filtering%20system/supabase_schema.sql), and click **Run**.
+3. **Configure Environment**:
+   - In `.env` (Local testing):
+     ```env
+     DATABASE_TYPE=supabase
+     SUPABASE_URL=https://your-project-id.supabase.co
+     SUPABASE_KEY=your-service-role-key
+     ```
+   - In **Vercel Settings $\rightarrow$ Environment Variables** (Production):
+     Add `DATABASE_TYPE=supabase`, `SUPABASE_URL`, and `SUPABASE_KEY`.
 
 ---
 
 ## 18. Screens & Interface Walkthrough
-1. **Scan Console**: Live input box, character counter, quick demo pills, dual-engine results, and token X-Ray chips.
-2. **Archive Tab**: Audit trail of stored investigations, search bar, multi-criteria filtering, and detailed forensic drawer.
-3. **Insights Tab**: Real-time summary metric cards, average confidence & threat gauges, Chart.js detection timeline, threat distribution donut, and risk indicator ranking.
+1. **Authentication Portal**: Split-screen cybersecurity login and registration forms with validation.
+2. **Scan Console**: Live input box, character counter, quick demo pills, dual-engine results, and token X-Ray chips.
+3. **Archive Tab**: Audit trail of stored investigations, search bar, multi-criteria filtering, and detailed forensic drawer.
+4. **Insights Tab**: Real-time summary metric cards, average confidence & threat gauges, Chart.js detection timeline, threat distribution donut, and risk indicator ranking.
 
 ---
 
 ## 19. Testing & Quality Assurance
-Run the complete 42-test automated regression suite:
+Run the complete automated test suites:
 ```bash
-python -m unittest discover -s tests -v
+# 1. Database Multi-Backend & Isolation Tests
+python test_db_backends.py
+
+# 2. REST API & ML Inference Engine Tests
+python test_api.py
+
+# 3. OAuth & Social Authentication Tests
+python test_oauth.py
 ```
-All 42 tests pass with 100% success rate across ML inference, heuristic calculations, defensive boundaries, XSS neutralization, and SQL aggregations.
+All test suites pass with 100% success rate across ML inference, heuristic calculations, defensive boundaries, XSS neutralization, multi-user data isolation, and SQL aggregations.
 
 ---
 
@@ -292,12 +325,8 @@ The application is pre-configured for instant zero-configuration deployment to *
 - **Entry Point**: `api/index.py` exposes the existing Flask WSGI application callable directly to Vercel's Python runtime.
 - **Routing**: `vercel.json` provides unified rewrite rules directing all API and frontend requests seamlessly through `api/index.py`.
 - **Pre-Trained Model**: The serialized Scikit-learn model (`model/spam_classifier.pkl` — 349 KB) is bundled into the deployment and loaded into memory as a singleton upon cold start, eliminating retraining overhead during request handling.
+- **Production Persistence**: Configured with Supabase Postgres for durable cross-instance data storage.
 
-### SQLite Serverless Persistence Note
-> [!IMPORTANT]
-> **Local vs. Serverless Persistence**:
-> - **Local Development**: Runs with persistent SQLite storage at `database/spamshield.db`, preserving the Archive and Insights across restarts.
-> - **Vercel Serverless Environment**: Operates in read-only container containers with dynamic `/tmp/spamshield.db` caching. For long-term multi-region production persistence, connect an external managed database (e.g., PostgreSQL / Supabase). The core ML Threat Detection and Message X-Ray engine runs 100% natively in production on Vercel without external dependencies.
 
 ---
 
