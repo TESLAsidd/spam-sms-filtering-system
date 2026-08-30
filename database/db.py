@@ -27,7 +27,12 @@ def get_db_connection():
         os.makedirs(os.path.dirname(active_path), exist_ok=True)
     except Exception:
         pass
-    conn = sqlite3.connect(active_path)
+    conn = sqlite3.connect(active_path, timeout=30.0)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+    except Exception:
+        pass
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -50,13 +55,30 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL COLLATE NOCASE,
-            password_hash TEXT NOT NULL,
+            password_hash TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
     
-    # 2. Create Analyses Table
+    # 2. Create OAuth Identities Table for Multi-Provider Account Linking
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS oauth_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL COLLATE NOCASE,
+            provider_user_id TEXT NOT NULL,
+            email TEXT COLLATE NOCASE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            UNIQUE (provider, provider_user_id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_oauth_identities_user_id ON oauth_identities(user_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_oauth_identities_lookup ON oauth_identities(provider, provider_user_id)")
+    
+    # 3. Create Analyses Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS analyses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +100,7 @@ def init_db():
         )
     """)
     
-    # 3. Safe Schema Migration: Ensure user_id column exists if table was created in an earlier phase
+    # 4. Safe Schema Migration: Ensure user_id column exists if table was created in an earlier phase
     cursor.execute("PRAGMA table_info(analyses)")
     existing_columns = [col["name"] for col in cursor.fetchall()]
     if "user_id" not in existing_columns:
@@ -97,7 +119,7 @@ def init_db():
 # USER AUTHENTICATION & MANAGEMENT
 # =============================================================================
 
-def create_user(name: str, email: str, password_hash: str) -> int:
+def create_user(name: str, email: str, password_hash: str = "") -> int:
     """
     Register a new user in the SQLite database.
     Returns the newly created user's primary key ID.
@@ -111,7 +133,7 @@ def create_user(name: str, email: str, password_hash: str) -> int:
     """, (
         name.strip(),
         email.strip().lower(),
-        password_hash,
+        password_hash or "",
         datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     ))
     user_id = cursor.lastrowid
@@ -161,6 +183,161 @@ def get_user_by_id(user_id: int) -> dict:
             "created_at": str(row["created_at"])
         }
     return None
+
+def get_user_by_oauth_identity(provider: str, provider_user_id: str) -> dict:
+    """
+    Retrieve user record by linked OAuth identity (provider + provider_user_id).
+    Updates last_login_at timestamp if found.
+    Returns user dict or None.
+    """
+    if not provider or not provider_user_id:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT u.id, u.name, u.email, u.created_at, oi.provider, oi.provider_user_id
+        FROM users u
+        JOIN oauth_identities oi ON u.id = oi.user_id
+        WHERE LOWER(oi.provider) = LOWER(?) AND oi.provider_user_id = ?
+    """, (provider.strip(), str(provider_user_id).strip()))
+    row = cursor.fetchone()
+    
+    if row:
+        user_id = row["id"]
+        # Update last login timestamp for this identity
+        cursor.execute("""
+            UPDATE oauth_identities 
+            SET last_login_at = ? 
+            WHERE user_id = ? AND LOWER(provider) = LOWER(?)
+        """, (datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), user_id, provider.strip()))
+        conn.commit()
+        user_dict = {
+            "id": row["id"],
+            "name": row["name"],
+            "email": row["email"],
+            "created_at": str(row["created_at"]),
+            "provider": row["provider"],
+            "provider_user_id": row["provider_user_id"]
+        }
+        conn.close()
+        return user_dict
+    conn.close()
+    return None
+
+def link_oauth_identity(user_id: int, provider: str, provider_user_id: str, email: str = None) -> int:
+    """
+    Link a social identity (provider + provider_user_id) to an existing user.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO oauth_identities (user_id, provider, provider_user_id, email, created_at, last_login_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(provider, provider_user_id) DO UPDATE SET
+            user_id = excluded.user_id,
+            email = excluded.email,
+            last_login_at = excluded.last_login_at
+    """, (
+        int(user_id),
+        provider.strip().lower(),
+        str(provider_user_id).strip(),
+        (email.strip().lower() if email else None),
+        now_str,
+        now_str
+    ))
+    identity_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return identity_id
+
+def get_user_identities(user_id: int) -> list:
+    """Retrieve all linked OAuth identities for a user."""
+    if not user_id:
+        return []
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, provider, provider_user_id, email, created_at, last_login_at
+        FROM oauth_identities
+        WHERE user_id = ?
+        ORDER BY created_at ASC
+    """, (int(user_id),))
+    rows = cursor.fetchall()
+    identities = [
+        {
+            "id": r["id"],
+            "provider": r["provider"],
+            "provider_user_id": r["provider_user_id"],
+            "email": r["email"],
+            "created_at": str(r["created_at"]),
+            "last_login_at": str(r["last_login_at"])
+        }
+        for r in rows
+    ]
+    conn.close()
+    return identities
+
+def resolve_or_create_oauth_user(
+    provider: str,
+    provider_user_id: str,
+    email: str = None,
+    name: str = None,
+    is_email_verified: bool = False
+) -> tuple:
+    """
+    Deterministic Account Resolution & Linking Pipeline:
+    1. Primary Lookup: Match by (provider, provider_user_id) in oauth_identities.
+    2. Email Match & Linking: If verified email matches existing account in users, link identity.
+    3. Auto-Registration: If no existing user, create local user and link identity.
+    
+    Returns: (user_dict, "existing_identity" | "linked_account" | "created_account")
+    """
+    provider = provider.strip().lower()
+    provider_user_id = str(provider_user_id).strip()
+    clean_email = email.strip().lower() if email else None
+    
+    # 1. Check if identity already linked
+    existing_user = get_user_by_oauth_identity(provider, provider_user_id)
+    if existing_user:
+        return existing_user, "existing_identity"
+    
+    # 2. Check if verified email matches an existing local user account
+    if clean_email and is_email_verified:
+        matched_user = get_user_by_email(clean_email)
+        if matched_user:
+            # Link this social identity to the existing account
+            link_oauth_identity(matched_user["id"], provider, provider_user_id, clean_email)
+            return matched_user, "linked_account"
+    
+    # 3. Create new user
+    display_name = (name or "").strip()
+    if not display_name:
+        if clean_email:
+            display_name = clean_email.split("@")[0].replace(".", " ").title()
+        else:
+            display_name = f"{provider.capitalize()} User"
+            
+    # For email, if provider didn't return one, generate a placeholder
+    account_email = clean_email or f"{provider}_{provider_user_id}@oauth.sentinel.local"
+    
+    # Ensure email uniqueness if collision occurs
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ? COLLATE NOCASE", (account_email,))
+    if cursor.fetchone():
+        account_email = f"{account_email.split('@')[0]}_{provider_user_id[:6]}@{account_email.split('@')[-1]}"
+    conn.close()
+    
+    # Insert user (handle nullable password_hash)
+    try:
+        user_id = create_user(name=display_name, email=account_email, password_hash=None)
+    except Exception:
+        user_id = create_user(name=display_name, email=account_email, password_hash="")
+        
+    link_oauth_identity(user_id, provider, provider_user_id, clean_email)
+    user_record = get_user_by_id(user_id)
+    return user_record, "created_account"
 
 # =============================================================================
 # ANALYSES CRUD WITH PER-USER DATA ISOLATION

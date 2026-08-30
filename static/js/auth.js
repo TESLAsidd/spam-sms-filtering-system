@@ -1,10 +1,56 @@
 /**
  * SMS SENTINEL — Authentication Client Logic
- * Handles client-side validation, password toggles, API calls, and session state.
+ * Handles client-side validation, password toggles, theme management, API calls, and session state.
  */
 
+function updateThemeIcons(theme) {
+    const sun = document.getElementById("themeIconSun");
+    const moon = document.getElementById("themeIconMoon");
+    if (sun && moon) {
+        if (theme === "light") {
+            sun.classList.add("hidden");
+            moon.classList.remove("hidden");
+        } else {
+            sun.classList.remove("hidden");
+            moon.classList.add("hidden");
+        }
+    }
+}
+
+function setSentinelTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+        localStorage.setItem("sms_sentinel_theme", theme);
+    } catch (e) {}
+    updateThemeIcons(theme);
+}
+
+// Initialize theme on script load
+(function() {
+    let theme = "light";
+    try {
+        theme = localStorage.getItem("sms_sentinel_theme") || "light";
+    } catch (e) {
+        theme = "light";
+    }
+    document.documentElement.setAttribute("data-theme", theme);
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Password Visibility Toggle
+    // 1. Theme Toggle Button
+    let currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+    updateThemeIcons(currentTheme);
+
+    const themeToggleBtn = document.getElementById("authThemeToggle");
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener("click", () => {
+            const active = document.documentElement.getAttribute("data-theme") || "light";
+            const next = active === "light" ? "dark" : "light";
+            setSentinelTheme(next);
+        });
+    }
+
+    // 2. Password Visibility Toggle
     const toggleBtn = document.getElementById("togglePasswordBtn");
     const passwordInput = document.getElementById("password");
     const confirmInput = document.getElementById("confirmPassword");
@@ -31,13 +77,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Show standard eye icon
                 eyeIcon.innerHTML = `
                     <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                    <circle cx="12" cy="12" r="3"/>
+                    <circle cx="12" cy="3" r="3"/>
                 `;
             }
         });
     }
 
-    // 2. Alert helpers
+    // 3. Alert helpers
     const alertBox = document.getElementById("authAlert");
     const alertText = document.getElementById("authAlertText");
 
@@ -53,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
         alertBox.classList.add("hidden");
     }
 
-    // 3. Button state helper
+    // 4. Button state helper
     const submitBtn = document.getElementById("submitBtn");
     const btnText = document.getElementById("btnText");
     const btnSpinner = document.getElementById("btnSpinner");
@@ -69,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // 4. Handle Login Form Submission
+    // 5. Handle Login Form Submission
     const loginForm = document.getElementById("loginForm");
     if (loginForm) {
         loginForm.addEventListener("submit", async (e) => {
@@ -108,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showAlert("Authentication successful! Redirecting...", true);
+                    showAlert("Authentication successful! Launching dashboard...", true);
                     setTimeout(() => {
                         window.location.href = "/";
                     }, 400);
@@ -126,7 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 5. Handle Register Form Submission
+    // 6. Handle Register Form Submission
     const registerForm = document.getElementById("registerForm");
     if (registerForm) {
         registerForm.addEventListener("submit", async (e) => {
@@ -192,6 +238,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 setSubmitting(false);
                 if (btnText) btnText.innerHTML = "Create account &rarr;";
             }
+        });
+    }
+
+    // 7. Check for OAuth error/status in URL query params on page load
+    (function checkUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get("error");
+        const msg = urlParams.get("msg");
+        const provider = urlParams.get("provider");
+
+        if (msg) {
+            showAlert(msg);
+        } else if (error) {
+            const errorMap = {
+                "cancelled": "Sign-in was cancelled.",
+                "access_denied": "Access was denied by the identity provider.",
+                "config_missing": `${provider ? provider.toUpperCase() : "Social"} sign-in is not configured yet.`,
+                "invalid_state": "Session security state expired. Please try again.",
+                "token_exchange_failed": "Unable to complete social sign-in. Please try again.",
+                "identity_error": "Could not retrieve verified profile from provider.",
+                "unsupported_provider": "Unsupported login provider."
+            };
+            showAlert(errorMap[error] || "Unable to complete social authentication.");
+        }
+    })();
+
+    // 8. Interactive Forgot Password Link
+    const forgotLink = document.getElementById("forgotPassLink");
+    if (forgotLink) {
+        forgotLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            showAlert("To reset your password, please contact your system administrator.");
         });
     }
 });

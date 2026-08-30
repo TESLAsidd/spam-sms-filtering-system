@@ -19,6 +19,12 @@ class TestFlaskMLAPI(unittest.TestCase):
     def setUpClass(cls):
         cls.client = app.test_client()
 
+    def setUp(self):
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = 1
+            sess["user_email"] = "test@example.com"
+            sess["user_name"] = "Test User"
+
     def test_01_health_check_endpoint(self):
         """Verify GET / returns 200 and online status."""
         response = self.client.get("/", headers={"Accept": "application/json"})

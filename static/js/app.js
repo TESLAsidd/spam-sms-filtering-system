@@ -1746,7 +1746,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
 
   function initTheme() {
-    const savedTheme = localStorage.getItem("sms_sentinel_theme") || "dark";
+    const savedTheme = localStorage.getItem("sms_sentinel_theme") || "light";
     applyTheme(savedTheme, false);
   }
 
@@ -1766,7 +1766,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Dynamic Chart Theme Adaptation
     const isLight = theme === "light";
-    const gridColor = isLight ? "rgba(0, 0, 0, 0.07)" : "rgba(34, 48, 35, 0.3)";
+    const gridColor = isLight ? "rgba(0, 0, 0, 0.07)": "rgba(34, 48, 35, 0.3)";
     const tickColor = isLight ? "#728775" : "#5c645a";
     const legendColor = isLight ? "#4a5e4d" : "#7f9280";
 
@@ -1791,8 +1791,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function toggleTheme() {
-    const current = document.documentElement.getAttribute("data-theme") || "dark";
-    const next = current === "dark" ? "light" : "dark";
+    const current = document.documentElement.getAttribute("data-theme") || "light";
+    const next = current === "light" ? "dark" : "light";
     applyTheme(next, true);
   }
 

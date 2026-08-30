@@ -8,11 +8,26 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import joblib
 
 from model.xray_analyzer import analyze_message_signals
+from auth.oauth_service import (
+    init_oauth,
+    oauth,
+    SUPPORTED_PROVIDERS,
+    is_provider_configured,
+    get_redirect_uri,
+    is_safe_url,
+    extract_google_identity,
+    extract_github_identity,
+    extract_microsoft_identity
+)
 from database.db import (
     init_db,
     create_user,
     get_user_by_email,
     get_user_by_id,
+    resolve_or_create_oauth_user,
+    get_user_by_oauth_identity,
+    link_oauth_identity,
+    get_user_identities,
     save_analysis,
     get_analyses,
     get_analysis_by_id,
@@ -39,6 +54,9 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
 )
+
+# Initialize OAuth client providers
+init_oauth(app)
 
 # Secure Flask session configuration
 app.secret_key = os.environ.get("SECRET_KEY", "sms-sentinel-session-secret-production-token-2026-key-v1")
@@ -426,7 +444,8 @@ def api_auth_me():
                 "id": user["id"],
                 "name": user["name"],
                 "email": user["email"],
-                "created_at": user.get("created_at")
+                "created_at": user.get("created_at"),
+                "auth_provider": session.get("auth_provider", "password")
             }
         }), 200
     return jsonify({"authenticated": False}), 200
@@ -436,6 +455,168 @@ def logout_page():
     """Logs out the user and redirects to /login."""
     session.clear()
     return redirect("/login")
+
+# =============================================================================
+# SOCIAL OAUTH / OPENID CONNECT ROUTES (GOOGLE, GITHUB, MICROSOFT)
+# =============================================================================
+
+@app.route("/auth/<provider>/login", methods=["GET"])
+def oauth_login(provider):
+    """
+    Initiate OAuth2 / OpenID Connect authorization code flow with state/PKCE.
+    Validates provider and handles unconfigured / missing credentials gracefully.
+    """
+    provider = provider.lower().strip()
+    if provider not in SUPPORTED_PROVIDERS:
+        return redirect(url_for("login_page", error="unsupported_provider", msg="Unsupported login provider."))
+
+    # Validate and remember safe next redirection URL
+    next_url = request.args.get("next") or request.args.get("return_url") or "/"
+    if not is_safe_url(next_url):
+        next_url = "/"
+    session["oauth_next_url"] = next_url
+
+    friendly_names = {"google": "Google", "github": "GitHub", "microsoft": "Microsoft"}
+    p_name = friendly_names.get(provider, provider.capitalize())
+
+    # Check if provider has active client credentials in the environment
+    if not is_provider_configured(provider):
+        logger.warning(f"OAuth attempt for unconfigured provider: '{provider}'")
+        return redirect(url_for("login_page", error="config_missing", provider=provider, msg=f"{p_name} sign-in is not configured yet. Please configure credentials."))
+
+    client = oauth.create_client(provider)
+    if not client:
+        return redirect(url_for("login_page", error="provider_unavailable", msg=f"{p_name} authentication is temporarily unavailable."))
+
+    redirect_uri = get_redirect_uri(request, provider)
+    logger.info(f"Initiating {provider} OAuth flow with redirect URI: {redirect_uri}")
+    
+    return client.authorize_redirect(redirect_uri)
+
+@app.route("/auth/<provider>/callback", methods=["GET"])
+def oauth_callback(provider):
+    """
+    Handle OAuth2 / OpenID Connect provider callback:
+    1. Handle provider errors, denial, and cancellations.
+    2. Exchange authorization code for token and validate CSRF state.
+    3. Extract normalized identity (subject user ID, verified email, display name).
+    4. Deterministically resolve or link account in SQLite.
+    5. Establish unified Flask session and redirect safely to /scan.
+    """
+    provider = provider.lower().strip()
+    if provider not in SUPPORTED_PROVIDERS:
+        return redirect(url_for("login_page", error="unsupported_provider", msg="Invalid authentication callback."))
+
+    friendly_names = {"google": "Google", "github": "GitHub", "microsoft": "Microsoft"}
+    p_name = friendly_names.get(provider, provider.capitalize())
+
+    # 1. Check for provider-returned error parameters (e.g. user cancelled)
+    error_code = request.args.get("error")
+    error_desc = request.args.get("error_description", "")
+    if error_code:
+        logger.info(f"{provider} callback returned error: {error_code} ({error_desc})")
+        if error_code in ("access_denied", "user_cancelled", "consent_required", "interaction_required"):
+            return redirect(url_for("login_page", error="cancelled", msg=f"{p_name} sign-in was cancelled."))
+        return redirect(url_for("login_page", error="provider_error", msg=f"Unable to complete {p_name} sign-in."))
+
+    # 2. Verify authorization code is present in query parameters
+    code = request.args.get("code")
+    if not code:
+        return redirect(url_for("login_page", error="missing_code", msg=f"Invalid {p_name} response (missing authorization code)."))
+
+    # 3. Create Authlib Client
+    client = oauth.create_client(provider)
+    if not client:
+        return redirect(url_for("login_page", error="provider_unavailable", msg=f"{p_name} service is unavailable."))
+
+    # 4. Exchange code for access/ID token (Authlib validates CSRF state automatically)
+    try:
+        token = client.authorize_access_token()
+    except Exception as e:
+        logger.warning(f"OAuth token exchange / state verification failed for {provider}: {e}")
+        err_str = str(e).lower()
+        if "state" in err_str or "mismatch" in err_str or "csrf" in err_str:
+            return redirect(url_for("login_page", error="invalid_state", msg="Session expired or invalid security state. Please try again."))
+        return redirect(url_for("login_page", error="token_exchange_failed", msg=f"Unable to complete {p_name} sign-in. Please try again."))
+
+    if not token:
+        return redirect(url_for("login_page", error="empty_token", msg=f"Failed to obtain identity token from {p_name}."))
+
+    # 5. Extract Normalized Identity
+    try:
+        if provider == "google":
+            identity = extract_google_identity(token, client)
+        elif provider == "github":
+            identity = extract_github_identity(token, client)
+        elif provider == "microsoft":
+            identity = extract_microsoft_identity(token, client)
+        else:
+            raise ValueError(f"Unknown provider {provider}")
+    except Exception as err:
+        logger.error(f"Failed to extract identity from {provider}: {err}")
+        return redirect(url_for("login_page", error="identity_error", msg=f"Could not retrieve your verified profile from {p_name}."))
+
+    provider_user_id = identity.get("provider_user_id")
+    email = identity.get("email")
+    name = identity.get("name")
+    is_verified = identity.get("is_email_verified", False)
+
+    if not provider_user_id:
+        return redirect(url_for("login_page", error="missing_id", msg=f"No stable identity returned by {p_name}."))
+
+    # 6. Account Resolution and Linking Pipeline
+    try:
+        user_record, action = resolve_or_create_oauth_user(
+            provider=provider,
+            provider_user_id=provider_user_id,
+            email=email,
+            name=name,
+            is_email_verified=is_verified
+        )
+    except Exception as db_err:
+        logger.error(f"Database error during {provider} user resolution: {db_err}")
+        return redirect(url_for("login_page", error="db_error", msg="Database error while initializing account. Please try again."))
+
+    if not user_record:
+        return redirect(url_for("login_page", error="resolution_failed", msg="Could not resolve application account."))
+
+    # 7. Establish the Standard Authenticated Session
+    session["user_id"] = user_record["id"]
+    session["user_name"] = user_record["name"]
+    session["user_email"] = user_record["email"]
+    session["auth_provider"] = provider
+
+    logger.info(
+        f"OAuth Login Success: user_id=#{user_record['id']} ('{user_record['email']}') "
+        f"via {provider} [action={action}, verified_email={is_verified}]"
+    )
+
+    # 8. Retrieve safe internal destination and clean up
+    next_url = session.pop("oauth_next_url", "/")
+    if not is_safe_url(next_url):
+        next_url = "/"
+
+    return redirect(next_url)
+
+@app.route("/api/auth/providers", methods=["GET"])
+def api_auth_providers():
+    """Returns configuration status of each social login provider."""
+    return jsonify({
+        "google": is_provider_configured("google"),
+        "github": is_provider_configured("github"),
+        "microsoft": is_provider_configured("microsoft")
+    }), 200
+
+@app.route("/api/auth/identities", methods=["GET"])
+@login_required
+def api_auth_identities():
+    """Return all linked OAuth identities for the authenticated user."""
+    user_id = session.get("user_id")
+    identities = get_user_identities(user_id)
+    return jsonify({
+        "success": True,
+        "identities": identities
+    }), 200
 
 # =============================================================================
 # PROTECTED APPLICATION ROUTES
