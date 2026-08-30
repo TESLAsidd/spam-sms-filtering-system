@@ -118,7 +118,9 @@ handler = app
 init_oauth(app)
 
 # Secure Flask session configuration
-app.secret_key = os.environ.get("SECRET_KEY", "sms-sentinel-session-secret-production-token-2026-key-v1")
+SECRET_KEY = (os.environ.get("SECRET_KEY") or "").strip() or "sms-sentinel-session-secret-production-token-2026-key-v1"
+app.secret_key = SECRET_KEY
+app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 if os.environ.get("VERCEL") or os.environ.get("FLASK_ENV") == "production":
@@ -447,7 +449,7 @@ def api_register():
         }), 201
     except Exception as e:
         logger.error(f"Error registering user: {e}")
-        return jsonify({"success": False, "error": f"Registration failed: {type(e).__name__} - {e}"}), 500
+        return jsonify({"success": False, "error": "Registration failed. Please try again."}), 500
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
