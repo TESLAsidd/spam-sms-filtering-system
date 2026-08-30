@@ -14,39 +14,19 @@ DEFAULT_DB_PATH = os.path.join(DB_DIR, "spamshield.db")
 
 def _get_active_db_path():
     """Resolve database path, using /tmp on serverless environments where local filesystem is read-only."""
-    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    if (
+        os.environ.get("VERCEL")
+        or os.environ.get("VERCEL_ENV")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.environ.get("LAMBDA_TASK_ROOT")
+    ):
         return os.path.join("/tmp", "spamshield.db")
     return DEFAULT_DB_PATH
 
 DB_PATH = _get_active_db_path()
 
-def get_db_connection():
-    """Establish a safe connection to the SQLite database with dict-like row access."""
-    active_path = _get_active_db_path()
-    try:
-        os.makedirs(os.path.dirname(active_path), exist_ok=True)
-    except Exception:
-        pass
-    conn = sqlite3.connect(active_path, timeout=30.0)
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-    except Exception:
-        pass
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    """
-    Initialize SQLite database schema and indexes on application startup.
-    Ensures zero-config automatic creation and backward-compatible schema migrations.
-    """
-    try:
-        os.makedirs(DB_DIR, exist_ok=True)
-    except Exception:
-        pass
-        
-    conn = get_db_connection()
+def _create_tables(conn):
+    """Internal helper to create tables and indexes on a live connection."""
     cursor = conn.cursor()
     
     # 1. Create Users Table
@@ -113,6 +93,40 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_analyses_threat_score ON analyses(threat_score)")
     
     conn.commit()
+
+def get_db_connection():
+    """Establish a safe connection to the SQLite database with dict-like row access and schema verification."""
+    active_path = _get_active_db_path()
+    try:
+        os.makedirs(os.path.dirname(active_path), exist_ok=True)
+    except Exception:
+        pass
+
+    conn = sqlite3.connect(active_path, timeout=30.0)
+    try:
+        conn.execute("PRAGMA busy_timeout=5000;")
+    except Exception:
+        pass
+    conn.row_factory = sqlite3.Row
+
+    # Self-healing: verify tables exist (crucial for ephemeral serverless /tmp filesystems)
+    try:
+        check_cursor = conn.cursor()
+        check_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        if not check_cursor.fetchone():
+            _create_tables(conn)
+    except Exception:
+        pass
+
+    return conn
+
+def init_db():
+    """
+    Initialize SQLite database schema and indexes on application startup.
+    Ensures zero-config automatic creation and backward-compatible schema migrations.
+    """
+    conn = get_db_connection()
+    _create_tables(conn)
     conn.close()
 
 # =============================================================================
