@@ -447,7 +447,7 @@ def api_register():
         }), 201
     except Exception as e:
         logger.error(f"Error registering user: {e}")
-        return jsonify({"success": False, "error": "Registration failed. Please try again."}), 500
+        return jsonify({"success": False, "error": f"Registration failed: {type(e).__name__} - {e}"}), 500
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
