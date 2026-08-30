@@ -55,6 +55,19 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
+# Secure Flask session configuration
+SECRET_KEY = (os.environ.get("SECRET_KEY") or "").strip() or "sms-sentinel-session-secret-production-token-2026-key-v1"
+app.secret_key = SECRET_KEY
+app.config["SECRET_KEY"] = SECRET_KEY
+app.config["SESSION_COOKIE_NAME"] = "sms_sentinel_session"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+if os.environ.get("VERCEL") or os.environ.get("FLASK_ENV") == "production":
+    app.config["SESSION_COOKIE_SECURE"] = True
+
+# Production Security Configuration: Limit max incoming request payload to 16KB
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+
 class VercelWSGIMiddleware:
     """
     WSGI Middleware to normalize PATH_INFO on Vercel deployments.
@@ -116,18 +129,6 @@ handler = app
 
 # Initialize OAuth client providers
 init_oauth(app)
-
-# Secure Flask session configuration
-SECRET_KEY = (os.environ.get("SECRET_KEY") or "").strip() or "sms-sentinel-session-secret-production-token-2026-key-v1"
-app.secret_key = SECRET_KEY
-app.config["SECRET_KEY"] = SECRET_KEY
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-if os.environ.get("VERCEL") or os.environ.get("FLASK_ENV") == "production":
-    app.config["SESSION_COOKIE_SECURE"] = True
-
-# Production Security Configuration: Limit max incoming request payload to 16KB
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
 def login_required(f):
     """Decorator to require authentication for protected API and HTML endpoints."""
